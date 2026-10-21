@@ -58,8 +58,9 @@ tests in `tests/`.
 
 - The lockfile is committed and installs use `--frozen-lockfile`. Dependabot watches npm, Docker and
   GitHub Actions.
-- CI runs `pnpm audit --prod` (fails on high or critical), CodeQL with the security-extended
-  queries, and builds the Docker images.
+- CI runs `pnpm audit --prod` (fails on high or critical) and builds the Docker images. CodeQL with
+  the security-extended queries runs as well, on public repositories (on a private one it needs
+  GitHub Advanced Security, and is skipped).
 - GitHub Actions are pinned to full commit SHAs, workflows request read-only permissions, and
   checkouts don't keep credentials.
 - Container base images are pinned by tag (`node:22-alpine`, `postgres:18-alpine`), **not** by digest.
