@@ -135,6 +135,20 @@ suggest.example.com {
 }
 ```
 
+If your proxy runs in Docker, give it a route to the site without publishing a port: create a
+`docker-compose.override.yml` next to `docker-compose.yml` (it is git-ignored, Compose reads it
+automatically) that joins the proxy's network, then point the proxy at `voidsuggest:3000`:
+
+```yaml
+services:
+  voidsuggest:
+    networks: [default, proxy]
+networks:
+  proxy:
+    external: true
+    name: your-proxy-network   # see `docker network ls`
+```
+
 Caddy sets `X-Forwarded-For` to the visitor's address, which the site uses for rate limiting and
 the audit log (`CLIENT_IP_HEADER`, last entry trusted). If another proxy or CDN sits in front, set
 `CLIENT_IP_HEADER` to the header it uses, for example `cf-connecting-ip`. Don't expose the site's

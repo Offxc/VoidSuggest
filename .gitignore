@@ -25,3 +25,6 @@ next-env.d.ts
 # Editors
 .idea/
 .vscode/
+
+# Local Compose overrides (per-server settings, such as a proxy network)
+docker-compose.override.yml

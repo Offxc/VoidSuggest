@@ -14,9 +14,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    # No `ports:` on purpose. Only the web container can reach the database.
+    # No `ports:` on purpose. Only the app container can reach the database.
 
-  # Applies pending database migrations, then exits. Runs before `web` starts.
+  # Applies pending database migrations, then exits. Runs before `voidsuggest` starts.
   migrate:
     build:
       context: .
@@ -28,7 +28,9 @@ services:
         condition: service_healthy
     restart: "no"
 
-  web:
+  # Named after the project rather than `web`: the service name is also its address on any
+  # network it joins, so a generic name can collide with another stack's on a shared proxy network.
+  voidsuggest:
     build:
       context: .
       target: runtime
