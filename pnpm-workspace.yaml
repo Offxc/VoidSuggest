@@ -1,0 +1,16 @@
+# Not a multi-package workspace. This file only carries pnpm settings.
+# Dependencies with install scripts are listed explicitly; everything else is
+# blocked from running scripts at install time.
+allowBuilds:
+  "@embedded-postgres/linux-x64": true
+  "@prisma/engines": true
+  esbuild: true
+  prisma: true
+
+onlyBuiltDependencies:
+  - embedded-postgres
+  - "@embedded-postgres/linux-x64"
+  - prisma
+  - "@prisma/client"
+  - "@prisma/engines"
+  - esbuild

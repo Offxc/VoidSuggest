@@ -1,0 +1,313 @@
+// Source of truth for the database. Anything Prisma's schema language can't
+// express (partial unique indexes, CHECK constraints, the audit-log trigger)
+// lives as hand-written SQL at the bottom of the initial migration; keep it
+// there when generating new migrations.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ApprovalState {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// OFF: comments were never enabled and the section is hidden.
+/// OPEN: members can comment.
+/// CLOSED: read-only; existing comments stay visible.
+enum CommentsMode {
+  OFF
+  OPEN
+  CLOSED
+}
+
+enum AuditOutcome {
+  SUCCESS
+  DENIED
+  FAILURE
+}
+
+enum NoticeKind {
+  SUGGESTION_APPROVED
+  SUGGESTION_REJECTED
+  STATUS_CHANGED
+}
+
+enum TimelineKind {
+  SUBMITTED
+  APPROVED
+  STATUS_CHANGED
+  COMMENTS_OPENED
+  COMMENTS_CLOSED
+  EDITED
+}
+
+// ── People ───────────────────────────────────────────────────────────
+
+model User {
+  id                     String    @id @default(cuid())
+  discordId              String    @unique @db.VarChar(32)
+  /// Global Discord handle.
+  username               String    @db.VarChar(64)
+  globalName             String?   @db.VarChar(64)
+  /// Per-server nickname, when set.
+  nick                   String?   @db.VarChar(64)
+  /// What the site shows everywhere: nick, then display name, then handle.
+  displayName            String    @db.VarChar(64)
+  avatarHash             String?   @db.VarChar(40)
+  guildAvatarHash        String?   @db.VarChar(40)
+  isOwner                Boolean   @default(false)
+  /// Holds the configured Member role in the Discord server.
+  isMember               Boolean   @default(false)
+  joinedGuildAt          DateTime?
+  leftGuildAt            DateTime?
+  blockedAt              DateTime?
+  blockedReason          String?   @db.VarChar(200)
+  /// Bumped to invalidate every session this user has.
+  sessionVersion         Int       @default(0)
+  ackedGuidelinesVersion Int       @default(0)
+  createdAt              DateTime  @default(now())
+  lastLoginAt            DateTime?
+  lastSyncedAt           DateTime?
+
+  suggestions Suggestion[]
+  votes       Vote[]
+  comments    Comment[]
+  notices     Notice[]
+
+  @@index([isMember])
+}
+
+// ── Configuration ────────────────────────────────────────────────────
+
+/// Exactly one row (id = 1), enforced by a CHECK constraint.
+model Settings {
+  id                   Int          @id @default(1)
+  siteName             String       @default("VoidSuggest") @db.VarChar(60)
+  introText            String?      @db.VarChar(1000)
+  accentColor          String       @default("purple") @db.VarChar(16)
+  discordInviteUrl     String?      @db.VarChar(200)
+  memberRoleId         String?      @db.VarChar(32)
+  /// Votes a member can have on open suggestions at once. NULL = unlimited.
+  voteSlots            Int?         @default(5)
+  minDaysInServer      Int          @default(0)
+  submissionsOpen      Boolean      @default(true)
+  maxPendingPerUser    Int          @default(3)
+  maxSubmissionsPerDay Int          @default(3)
+  maxTagsPerSuggestion Int          @default(3)
+  requireGuidelinesAck Boolean      @default(false)
+  guidelinesVersion    Int          @default(1)
+  /// Only OFF or OPEN are valid here.
+  defaultCommentsMode  CommentsMode @default(OFF)
+  removeVotesOnLeave   Boolean      @default(true)
+  /// Encrypted at rest; never returned to the browser.
+  webhookUrlEnc        String?
+  notifyPending        Boolean      @default(true)
+  notifyStatusChange   Boolean      @default(false)
+  /// Set once the starter statuses, types and guidelines exist, so deleting
+  /// one later is not undone on the next boot.
+  seededAt             DateTime?
+  updatedAt            DateTime     @updatedAt
+}
+
+model Status {
+  id                    String  @id @default(cuid())
+  name                  String  @db.VarChar(40)
+  slug                  String  @unique @db.VarChar(48)
+  color                 String  @default("purple") @db.VarChar(16)
+  sortOrder             Int     @default(0)
+  /// New approvals land here. Exactly one row (partial unique index).
+  isDefault             Boolean @default(false)
+  /// Members can vote, and votes occupy slots, while a suggestion is here.
+  votingOpen            Boolean @default(false)
+  closesCommentsOnEntry Boolean @default(false)
+  showOnRoadmap         Boolean @default(false)
+
+  suggestions Suggestion[]
+}
+
+model SuggestionType {
+  id          String  @id @default(cuid())
+  name        String  @db.VarChar(40)
+  slug        String  @unique @db.VarChar(48)
+  description String? @db.VarChar(200)
+  color       String  @default("purple") @db.VarChar(16)
+  icon        String  @default("sparkle") @db.VarChar(24)
+  enabled     Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  suggestions Suggestion[]
+  guidelines  GuidelineType[]
+}
+
+model Tag {
+  id        String @id @default(cuid())
+  name      String @db.VarChar(32)
+  slug      String @unique @db.VarChar(40)
+  color     String @default("purple") @db.VarChar(16)
+  sortOrder Int    @default(0)
+
+  suggestions SuggestionTag[]
+}
+
+model Guideline {
+  id           String  @id @default(cuid())
+  title        String  @db.VarChar(80)
+  body         String  @db.VarChar(2000)
+  sortOrder    Int     @default(0)
+  /// When false, only shown for the types in `types`.
+  appliesToAll Boolean @default(true)
+
+  types GuidelineType[]
+}
+
+model GuidelineType {
+  guidelineId String
+  typeId      String
+
+  guideline Guideline      @relation(fields: [guidelineId], references: [id], onDelete: Cascade)
+  type      SuggestionType @relation(fields: [typeId], references: [id], onDelete: Cascade)
+
+  @@id([guidelineId, typeId])
+}
+
+// ── Suggestions ──────────────────────────────────────────────────────
+
+model Suggestion {
+  id              String        @id @default(cuid())
+  /// Random, non-sequential id used in URLs.
+  publicId        String        @unique @db.VarChar(12)
+  authorId        String
+  title           String        @db.VarChar(120)
+  body            String        @db.VarChar(4000)
+  typeId          String?
+  approval        ApprovalState @default(PENDING)
+  rejectionReason String?       @db.VarChar(500)
+  /// Null until approved (CHECK constraint keeps these in step).
+  statusId        String?
+  /// Denormalised count of Vote rows, kept in step inside the same
+  /// transaction as every vote change. Used for sorting.
+  voteCount       Int           @default(0)
+  commentCount    Int           @default(0)
+  commentsMode    CommentsMode  @default(OFF)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  approvedAt      DateTime?
+  statusChangedAt DateTime?
+
+  author   User            @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  type     SuggestionType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  status   Status?         @relation(fields: [statusId], references: [id], onDelete: Restrict)
+  tags     SuggestionTag[]
+  votes    Vote[]
+  comments Comment[]
+  timeline TimelineEvent[]
+  notices  Notice[]
+
+  @@index([statusId, voteCount(sort: Desc), createdAt])
+  @@index([authorId, approval])
+  @@index([approval, createdAt])
+}
+
+model SuggestionTag {
+  suggestionId String
+  tagId        String
+
+  suggestion Suggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  tag        Tag        @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([suggestionId, tagId])
+  @@index([tagId])
+}
+
+/// One vote per person per suggestion: the composite key is the guarantee.
+model Vote {
+  suggestionId String
+  userId       String
+  createdAt    DateTime @default(now())
+
+  suggestion Suggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([suggestionId, userId])
+  @@index([userId])
+}
+
+model Comment {
+  id           String    @id @default(cuid())
+  suggestionId String
+  authorId     String
+  body         String    @db.VarChar(1000)
+  createdAt    DateTime  @default(now())
+  editedAt     DateTime?
+  deletedAt    DateTime?
+  deletedById  String?
+
+  suggestion Suggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  author     User       @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([suggestionId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+/// Public history shown on a suggestion's page. Status names are copied in
+/// so the history still reads correctly after a status is renamed or removed.
+model TimelineEvent {
+  id             String       @id @default(cuid())
+  suggestionId   String
+  kind           TimelineKind
+  fromStatusName String?      @db.VarChar(40)
+  toStatusName   String?      @db.VarChar(40)
+  createdAt      DateTime     @default(now())
+
+  suggestion Suggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+
+  @@index([suggestionId, createdAt])
+}
+
+/// In-site notifications for the author and voters.
+model Notice {
+  id              String     @id @default(cuid())
+  userId          String
+  kind            NoticeKind
+  suggestionId    String?
+  suggestionTitle String     @db.VarChar(120)
+  statusName      String?    @db.VarChar(40)
+  /// True when the move freed this person's vote slot.
+  voteReturned    Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+  readAt          DateTime?
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  suggestion Suggestion? @relation(fields: [suggestionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+}
+
+// ── Audit ────────────────────────────────────────────────────────────
+
+/// Append-only. A trigger in the initial migration rejects UPDATE and DELETE.
+model AuditLog {
+  id         BigInt       @id @default(autoincrement())
+  createdAt  DateTime     @default(now())
+  actorId    String?      @db.VarChar(32)
+  /// Snapshot, so a later rename doesn't rewrite history.
+  actorName  String       @db.VarChar(64)
+  action     String       @db.VarChar(64)
+  targetType String?      @db.VarChar(32)
+  targetId   String?      @db.VarChar(64)
+  outcome    AuditOutcome @default(SUCCESS)
+  details    Json?
+  ip         String?      @db.VarChar(45)
+  userAgent  String?      @db.VarChar(200)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([action])
+  @@index([actorId])
+}
