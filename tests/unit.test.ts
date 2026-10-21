@@ -6,6 +6,7 @@ import { excerptOf } from "@/server/dto";
 import { participationBlock } from "@/server/eligibility";
 import { getEnv, resetEnvForTests } from "@/server/env";
 import { clientIp, rateLimit, resetRateLimitsForTests } from "@/server/rate-limit";
+import { vi } from "vitest";
 import { cleanBlock, cleanLine, slugify } from "@/shared/text";
 import { boardQuerySchema, createSuggestionSchema, settingsSchema, statusSchema } from "@/shared/schemas";
 
@@ -177,6 +178,37 @@ describe("rate limiting", () => {
     expect(blocked.retryAfterSeconds).toBeGreaterThanOrEqual(1);
     expect(rateLimit("other", 3, 1000, t + 4).allowed).toBe(true);
     expect(rateLimit("k", 3, 1000, t + 2000).allowed).toBe(true);
+  });
+
+  it("warns once, in production only, when the proxy doesn't supply a client address", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      // Not production: silent.
+      clientIp(new Headers({ host: "suggest.example.com" }));
+      expect(warn).not.toHaveBeenCalled();
+
+      Object.assign(process.env, { NODE_ENV: "production" });
+      resetEnvForTests();
+      // The container's own health check talks to localhost with no proxy: silent.
+      clientIp(new Headers({ host: "127.0.0.1:3000" }));
+      clientIp(new Headers({ host: "localhost:3000" }));
+      expect(warn).not.toHaveBeenCalled();
+
+      // Real traffic with no address header: say so, once.
+      clientIp(new Headers({ host: "suggest.example.com" }));
+      clientIp(new Headers({ host: "suggest.example.com" }));
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toMatch(/CLIENT_IP_HEADER/);
+
+      // A valid address never warns.
+      resetRateLimitsForTests();
+      clientIp(new Headers({ host: "suggest.example.com", "x-forwarded-for": "203.0.113.5" }));
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+      Object.assign(process.env, { NODE_ENV: "test" });
+      resetEnvForTests();
+    }
   });
 
   it("reads the client address from the configured proxy header, trusting the last entry", () => {

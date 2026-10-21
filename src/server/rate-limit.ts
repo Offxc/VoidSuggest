@@ -46,6 +46,7 @@ function purge(now: number): void {
 
 export function resetRateLimitsForTests(): void {
   buckets.clear();
+  warned = false;
 }
 
 /**
@@ -59,9 +60,31 @@ export function resetRateLimitsForTests(): void {
  * without a proxy, these headers can be forged and per-IP limits are weaker.
  */
 export function clientIp(headers: Headers): string {
-  const name = getEnv().CLIENT_IP_HEADER;
+  const env = getEnv();
+  const name = env.CLIENT_IP_HEADER;
   const raw = headers.get(name);
-  if (!raw) return "unknown";
-  const candidate = name === "x-forwarded-for" ? raw.split(",").pop()!.trim() : raw.trim();
-  return isIP(candidate) ? candidate : "unknown";
+  const candidate = raw ? (name === "x-forwarded-for" ? raw.split(",").pop()!.trim() : raw.trim()) : "";
+  if (isIP(candidate)) return candidate;
+  if (env.isProd) warnNoClientAddress(name, headers.get("host"));
+  return "unknown";
+}
+
+let warned = false;
+
+/**
+ * Without a usable address every visitor shares one "unknown" bucket, so the
+ * per-address limits would apply to the whole site at once. That is almost
+ * always a proxy that doesn't set the header, so say so, once.
+ *
+ * Requests addressed to localhost are skipped: they are the container's own
+ * health check, which never goes through the proxy and so never has the header.
+ */
+function warnNoClientAddress(header: string, host: string | null): void {
+  const hostname = (host ?? "").replace(/:\d+$/, "").toLowerCase();
+  if (warned || hostname === "" || hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]") return;
+  warned = true;
+  console.warn(
+    `[rate-limit] No valid client address in the "${header}" header. Per-address limits are being shared by every visitor. ` +
+      "Check CLIENT_IP_HEADER and that your reverse proxy sets it.",
+  );
 }

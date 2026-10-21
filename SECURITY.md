@@ -49,7 +49,7 @@ tests in `tests/`.
   and HSTS when the site is on https. The framework version is not advertised.
 - Cookies are `HttpOnly`, `SameSite=Lax`, and on https `Secure` with the `__Host-` prefix.
 - Configuration is validated when the server starts and fails with the names (never the values) of
-  what is wrong. In production `SITE_URL` must be https.
+  what is wrong. In production `SITE_URL` must be https (plain http is accepted only for localhost).
 - Docker: the site binds to loopback only, the database has no published port, the runtime image
   runs as an unprivileged user and contains only what is needed to serve.
 - Fonts are served from the site itself. There are no third-party scripts, analytics or trackers.
