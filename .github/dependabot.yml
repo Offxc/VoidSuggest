@@ -16,3 +16,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Node majors are moved by hand, and only to LTS releases (even numbers).
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
