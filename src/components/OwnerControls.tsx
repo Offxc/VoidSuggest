@@ -63,6 +63,15 @@ export function OwnerControls({ publicId, approval, statusId, statuses, comments
     refresh();
   }
 
+  async function removeVote(voter: Voter) {
+    if (!window.confirm(`Remove ${voter.displayName}'s vote?`)) return;
+    const result = await api("DELETE", `/api/admin/suggestions/${publicId}/votes/${voter.userId}`);
+    if (!result.ok) return setMessage({ tone: "bad", text: result.message ?? "Couldn't remove that vote." });
+    // The page refreshes behind the dialog, but the dialog keeps its own copy of the list.
+    setVoters((current) => (current ?? []).filter((v) => v.userId !== voter.userId));
+    refresh();
+  }
+
   async function showVoters() {
     const result = await api<{ voters: Voter[] }>("GET", `/api/admin/suggestions/${publicId}/voters`);
     if (!result.ok || !result.data) return setMessage({ tone: "bad", text: result.message ?? "Couldn't load voters." });
@@ -163,13 +172,9 @@ export function OwnerControls({ publicId, approval, statusId, statuses, comments
             {voters?.map((v) => (
               <li key={v.userId}>
                 <span>{v.displayName}</span>
-                <ActionButton
-                  method="DELETE"
-                  url={`/api/admin/suggestions/${publicId}/votes/${v.userId}`}
-                  label="Remove vote"
-                  className="btn btn-quiet"
-                  confirm={`Remove ${v.displayName}'s vote?`}
-                />
+                <button type="button" className="btn btn-quiet" onClick={() => removeVote(v)}>
+                  Remove vote
+                </button>
               </li>
             ))}
           </ul>

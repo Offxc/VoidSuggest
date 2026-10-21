@@ -2,6 +2,7 @@ import { cache } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ActionButton } from "@/components/ActionButton";
 import { CommentActions } from "@/components/CommentActions";
 import { CommentForm } from "@/components/CommentForm";
 import { Icon } from "@/components/icons";
@@ -185,13 +186,23 @@ export default async function SuggestionPage({ params }: { params: Promise<{ id:
               ))}
             </ul>
           </div>
-          {detail.viewerIsAuthor && detail.approval === "PENDING" && !user?.isOwner && (
+          {detail.viewerIsAuthor && detail.approval !== "APPROVED" && !user?.isOwner && (
             <div className="side-block">
               <h3>Your suggestion</h3>
               <div className="row">
-                <Link className="btn btn-ghost btn-sm" href={`/s/${id}/edit`}>
-                  Edit
-                </Link>
+                {detail.approval === "PENDING" && (
+                  <Link className="btn btn-ghost btn-sm" href={`/s/${id}/edit`}>
+                    Edit
+                  </Link>
+                )}
+                <ActionButton
+                  method="DELETE"
+                  url={`/api/suggestions/${id}`}
+                  label="Withdraw"
+                  className="btn btn-danger btn-sm"
+                  confirm="Withdraw this suggestion? It will be deleted."
+                  redirectTo="/me"
+                />
               </div>
             </div>
           )}
