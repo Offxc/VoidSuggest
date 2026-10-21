@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { SiteDto, ViewerDto } from "@/shared/types";
-import { DiscordMark } from "./icons";
 import { NavLinks } from "./NavLinks";
+import { SignInLink } from "./SignInLink";
 
 export function Header({ site, viewer }: { site: SiteDto; viewer: ViewerDto | null }) {
   return (
@@ -23,10 +23,7 @@ export function Header({ site, viewer }: { site: SiteDto; viewer: ViewerDto | nu
               )}
             </Link>
           ) : (
-            <a className="btn btn-discord btn-sm" href="/api/auth/login">
-              <DiscordMark />
-              Sign in
-            </a>
+            <SignInLink />
           )}
         </div>
       </div>
