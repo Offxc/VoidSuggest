@@ -1,0 +1,27 @@
+# Dependencies and build output
+node_modules/
+.pnpm-store/
+.next/
+out/
+dist/
+build/
+coverage/
+generated/
+*.tsbuildinfo
+next-env.d.ts
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local dev database (embedded Postgres)
+.pgdata/
+
+# Logs and OS files
+*.log
+.DS_Store
+
+# Editors
+.idea/
+.vscode/
