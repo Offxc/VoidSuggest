@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BudgetChip } from "@/components/BudgetChip";
+import { Icon } from "@/components/icons";
 import { Markdown } from "@/components/Markdown";
 import { NewSuggestionButton } from "@/components/NewSuggestionButton";
 import { ParticipationNotice } from "@/components/ParticipationNotice";
@@ -42,12 +43,16 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
           {site.introText ? (
             <Markdown className="prose muted">{site.introText}</Markdown>
           ) : (
-            <p>Tell us what you'd like to see, and vote for the ideas that matter most to you.</p>
+            <p>Got an idea? Post it, and vote for the ones you want to see.</p>
           )}
           {site.voteSlots !== null && (
-            <p className="small dim">
-              Everyone gets {site.voteSlots} vote{site.voteSlots === 1 ? "" : "s"} at a time, so spend them on what you want most. You
-              get a vote back when something you voted for moves on.
+            <p className="vote-rule">
+              <Icon name="up" />
+              <span>
+                {site.voteSlots === 1
+                  ? "You get 1 vote at a time. It comes back when its suggestion moves on."
+                  : `You get ${site.voteSlots} votes at a time. Each one comes back when its suggestion moves on.`}
+              </span>
             </p>
           )}
         </div>

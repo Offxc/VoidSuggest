@@ -183,6 +183,21 @@ button, input, select, textarea {
   max-width: 560px;
   color: var(--muted);
 }
+.page-head .vote-rule {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: fit-content;
+  margin-top: 14px;
+  padding: 8px 14px 8px 11px;
+  border: 1px solid var(--line-2);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.vote-rule .icon { width: 15px; height: 15px; margin-top: 2px; color: var(--accent-hi); }
 .stack > * + * { margin-top: 16px; }
 .stack-lg > * + * { margin-top: 28px; }
 .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
