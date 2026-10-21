@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege: the jobs only need to read the code.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: voidsuggest_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgresql://test:test@127.0.0.1:5432/voidsuggest_test
+
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # --frozen-lockfile fails if the lockfile and package.json disagree.
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+        env:
+          # Only needed so the build can start; nothing connects with these.
+          DATABASE_URL: postgresql://placeholder:placeholder@127.0.0.1:5432/placeholder
+
+      # Known-vulnerable dependencies that ship in the production image. Fails on
+      # high or critical findings. Development tools are covered by Dependabot.
+      - run: pnpm audit --prod --audit-level high
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - run: docker build --target runtime --tag voidsuggest:ci .
+      - run: docker build --target migrate --tag voidsuggest-migrate:ci .
