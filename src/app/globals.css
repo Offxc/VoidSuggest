@@ -227,6 +227,7 @@ button, input, select, textarea {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.brand-logo { display: block; height: 46px; width: auto; }
 .nav {
   display: flex;
   gap: 4px;
@@ -290,6 +291,7 @@ button, input, select, textarea {
   .site-header { padding: 8px 12px 0; }
   .header-inner { gap: 10px; padding: 0 8px 0 12px; }
   .brand { font-size: 1.45rem; max-width: 8em; }
+  .brand-logo { height: 38px; }
   .nav { overflow-x: auto; scrollbar-width: none; }
   .nav::-webkit-scrollbar { display: none; }
   .user-chip span.chip-name { display: none; }
@@ -675,6 +677,7 @@ a.pill:hover { border-color: var(--tone-hi); }
 /* ── Auth card ────────────────────────────────────────────────────────── */
 .auth-wrap { display: grid; place-items: center; min-height: 60vh; }
 .auth-card { width: 100%; max-width: 420px; padding: 34px 30px; text-align: center; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r-lg); box-shadow: 0 24px 60px -30px #000; }
+.auth-logo { display: block; height: 96px; width: auto; margin: 0 auto 18px; }
 .auth-card h1 { font-family: var(--pixel); font-weight: 400; font-size: 2.6rem; line-height: 1; text-shadow: 0 3px 0 var(--extrude); margin-bottom: 10px; }
 .auth-card p { color: var(--muted); margin-bottom: 20px; }
 

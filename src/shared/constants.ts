@@ -56,3 +56,6 @@ export const LIMITS = {
 export const IDENTITY_FRESH_MS = 5 * 60 * 1000;
 
 export const PAGE_SIZE = 20;
+
+/** The name a fresh install starts with (matches the database default). Under this name the site shows its logo. */
+export const DEFAULT_SITE_NAME = "VoidSuggest";

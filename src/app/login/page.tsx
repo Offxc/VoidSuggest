@@ -5,6 +5,7 @@ import { getUser } from "@/server/current";
 import { toSite } from "@/server/dto";
 import { safeReturnTo } from "@/server/session";
 import { getSettings } from "@/server/settings";
+import { DEFAULT_SITE_NAME } from "@/shared/constants";
 
 export const metadata: Metadata = { title: "Sign in" };
 
@@ -28,6 +29,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <div className="auth-wrap">
       <div className="auth-card">
+        {site.siteName === DEFAULT_SITE_NAME && <img className="auth-logo" src="/logo.png" alt="" width={600} height={358} />}
         <h1>Sign in</h1>
         <p>
           Anyone can browse the board. Sign in with Discord to suggest ideas, vote and comment. You'll need the Member role in the server.

@@ -10,6 +10,7 @@ import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { toSite } from "@/server/dto";
 import { getViewer } from "@/server/current";
+import { getEnv } from "@/server/env";
 import { getSettings } from "@/server/settings";
 
 // Everything here depends on who is looking and on the database, so nothing is
@@ -18,10 +19,21 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSettings();
+  const description = "Suggest features and updates, and vote for the ideas you want most.";
   return {
+    // Makes the share image below an absolute address, which link previews (Discord, for one) need.
+    metadataBase: new URL(getEnv().siteOrigin),
     title: { default: settings.siteName, template: `%s · ${settings.siteName}` },
-    description: "Suggest features and updates, and vote for the ideas you want most.",
+    description,
     robots: { index: true, follow: true },
+    openGraph: {
+      type: "website",
+      siteName: settings.siteName,
+      title: settings.siteName,
+      description,
+      images: [{ url: "/og.png", width: 1200, height: 630, alt: settings.siteName }],
+    },
+    twitter: { card: "summary_large_image" },
   };
 }
 

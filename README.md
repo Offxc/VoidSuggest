@@ -110,6 +110,20 @@ this before you share the address. (To lock this down, set `OWNER_DISCORD_ID` an
 
 Then open **Admin → Settings** and choose which Discord role counts as "Member". Until you do, only you can sign in.
 
+### Branding
+
+A fresh install shows the VoidSuggest logo in the header and on the sign-in page, and uses it for
+the browser icon and for link previews (for example when a suggestion is shared in Discord). Rename
+the site under **Admin → Settings** and the header shows that name as text instead. To use your own
+artwork, replace these files and rebuild:
+
+| File | Used for | Size |
+| --- | --- | --- |
+| `public/logo.png` | Header and sign-in page | transparent PNG, about 600 px wide |
+| `public/og.png` | Link previews | 1200 × 630 |
+| `src/app/icon.png` | Browser tab icon | square, 512 × 512 |
+| `src/app/apple-icon.png` | iOS home screen | square, 180 × 180, opaque |
+
 ### Reverse proxy
 
 Any proxy that terminates HTTPS works. With [Caddy](https://caddyserver.com/):

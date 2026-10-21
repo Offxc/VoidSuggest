@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { SiteDto, ViewerDto } from "@/shared/types";
+import { BrandMark } from "./BrandMark";
 import { NavLinks } from "./NavLinks";
 import { SignInLink } from "./SignInLink";
 
@@ -8,7 +9,7 @@ export function Header({ site, viewer }: { site: SiteDto; viewer: ViewerDto | nu
     <header className="site-header">
       <div className="header-inner">
         <Link href="/" className="brand">
-          {site.siteName}
+          <BrandMark siteName={site.siteName} />
         </Link>
         <NavLinks isOwner={viewer?.isOwner ?? false} />
         <div className="header-actions">
