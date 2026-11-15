@@ -3,7 +3,8 @@
  *  - Validates the configuration, so a mistake stops the server here with a
  *    clear message rather than failing on someone's first request.
  *  - Creates the starter statuses, types and guidelines on a fresh database.
- *  - Starts the background job that keeps names and roles in step with Discord.
+ *  - Starts the background job that keeps names and roles in step with Discord,
+ *    and one that keeps the Discord board's posts in step with the site.
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -28,6 +29,12 @@ export async function register() {
     setTimeout(run, 30_000).unref();
     setInterval(run, env.MEMBER_SYNC_MINUTES * 60_000).unref();
   }
+
+  // Keeps the Discord board in step even if an earlier update failed (Discord
+  // down, a permission fixed since). Does nothing unless the owner switched it on.
+  const { scheduleBoardSync } = await import("@/server/board");
+  setTimeout(() => scheduleBoardSync(0), 20_000).unref();
+  setInterval(() => scheduleBoardSync(0), 10 * 60_000).unref();
 }
 
 async function withRetries(what: string, fn: () => Promise<void>, attempts = 10): Promise<void> {

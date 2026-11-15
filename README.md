@@ -51,6 +51,7 @@ default), and the owner can see who voted, remove a vote, or block someone.
 - Comment, on the suggestions where the owner has switched comments on
 - A "similar suggestions" check while typing a title, to cut down on duplicates
 - In-site notices for approvals, status changes and returned votes
+- **Vote from Discord** (when the owner has switched the board on): click Vote under a post, see how many votes you have left, and confirm. Those votes are the same votes as on the site
 
 **For the owner** (the first person to sign in)
 - Approval queue with approve, reject (with reason), edit and delete
@@ -62,6 +63,7 @@ default), and the owner can see who voted, remove a vote, or block someone.
 - Limits: votes per member, waiting suggestions per person, suggestions per day, tags per suggestion, days in server
 - Block people, strike votes, and an append-only **audit log** with CSV export
 - Optional Discord channel notifications through a webhook
+- Optional **Discord board**: every approved suggestion is posted to a channel with its stage and a Vote button, kept up to date as votes come in and you move it between stages, with voting locked in exactly the stages where the site locks it. An optional second channel holds a self-updating overview of the stages
 
 ## Tech stack
 
@@ -124,6 +126,31 @@ artwork, replace these files and rebuild:
 | `src/app/icon.png` | Browser tab icon | square, 512 × 512 |
 | `src/app/apple-icon.png` | iOS home screen | square, 180 × 180, opaque |
 
+### 4. Discord board (optional)
+
+This posts each approved suggestion to a Discord channel so players can vote without opening the site.
+Votes cast there and on the site share the same vote slots, and a player who has never visited the site
+gets an account the first time they vote (if they hold the Member role).
+
+1. In the developer portal's **General Information**, copy the **Public Key** into `.env` as
+   `DISCORD_PUBLIC_KEY` and restart the site. It is not secret, but without it the site can't tell that
+   clicks really come from Discord.
+2. In the channel(s) you want to use, give the bot **View Channel**, **Send Messages** and **Embed Links**.
+3. Open **Admin → Settings → Discord board**. Copy the *Interactions Endpoint URL* into the same page of the
+   developer portal and save. Discord tests it on the spot, so the site must already be running with the key.
+4. Enter the channel ID(s) (Developer Mode, then right-click the channel, then *Copy Channel ID*), switch the
+   board on and save. The channels are checked, then press **Post all current suggestions** to put the
+   existing ones in the channel. New approvals are posted on their own from then on.
+
+The channel only gets a **new message when there is a new suggestion**. Votes, moves between stages and
+edits change the post that is already there. Because ideas can only be submitted on the site, every post
+has a **Suggest an idea** button that opens the form, and the settings page gives you a line to paste into
+the channel's topic as well.
+
+If the site sits behind a proxy or CDN with bot protection, allow `POST /api/discord/interactions`
+through it; Discord has to be able to reach that one address. Posts show their stage, and the Vote button
+becomes a disabled "Voting closed" in the stages where you've turned voting off.
+
 ### Reverse proxy
 
 Any proxy that terminates HTTPS works. With [Caddy](https://caddyserver.com/):
@@ -177,6 +204,7 @@ Run **one** copy of the site. Rate limits and the member refresh job live in the
 | Variable | Required | Notes |
 | --- | --- | --- |
 | `POSTGRES_PASSWORD` | Compose | Password for the bundled database |
+| `DISCORD_PUBLIC_KEY` | Discord board | The application's public key (General Information). Needed for the vote buttons |
 | `SESSION_SECRET` | yes | 32+ random characters (`openssl rand -base64 48`). Rotating it signs everyone out and clears the stored webhook |
 | `SITE_URL` | yes | Public address. `https` in production |
 | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | yes | OAuth application |

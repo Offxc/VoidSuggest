@@ -20,9 +20,10 @@ tests in `tests/`.
 ### A01 Broken access control (includes SSRF)
 
 - Every API route is built with `defineApi` (`src/server/http.ts`) and **must declare** who may call
-  it: `public`, `member` or `owner`. The check runs before the handler. A test walks every route file
+  it: `public`, `member`, `owner`, or (for the one endpoint Discord itself calls) `discord`, which
+  requires a valid Discord signature instead of a session. The check runs before the handler. A test walks every route file
   and fails if one lacks a declaration, if anything under `/api/admin` is not owner-only, if the set
-  of public routes changes, or if a signed-out visitor, an ordinary member, a person without the
+  of public routes changes, if any route other than the Discord endpoint skips sessions, or if a signed-out visitor, an ordinary member, a person without the
   Member role, or a blocked person can reach a route they shouldn't.
 - Domain functions re-check permission themselves (owner-only functions assert the owner; member
   functions check the Member role, block state and limits), so a route can't be the only barrier.
@@ -118,7 +119,40 @@ tests in `tests/`.
 
 - Database changes only arrive through reviewed migrations, applied by a separate one-off container
   before the new version starts. The app never changes its own schema.
-- Nothing untrusted is deserialised into objects, and the app accepts no inbound webhooks.
+- Nothing untrusted is deserialised into objects. The only inbound calls from another service are
+  Discord's button clicks, and those are accepted only with a valid signature (see below).
+
+### The Discord board (optional)
+
+If the owner switches it on, approved suggestions are posted to a Discord channel with a Vote
+button, and Discord sends each click to `/api/discord/interactions`.
+
+- **Signature first.** Every request must carry Discord's Ed25519 signature over the timestamp and
+  the exact body, checked against the application's public key (`DISCORD_PUBLIC_KEY`) before the body
+  is parsed or anything is read from the database. A bad, missing or wrongly keyed signature is a
+  401, recorded in the audit log (once a minute per address). Requests whose timestamp is more than
+  five minutes from the server's clock are refused, so a captured request can't be replayed. With no
+  key configured, everything is refused. Tested, including a mutation check that the tests fail if the
+  verifier is weakened.
+- **The endpoint has no session and no cross-site check** (Discord's servers send no `Origin`); the
+  signature is the only door, and the access-matrix test insists it is the only route that works this way.
+- **Who clicked is believed only because the request is signed.** The click names the person and the
+  roles they hold in the server. It must be for this application and this server. The person is matched
+  to a site account by Discord ID; someone who has never visited the site gets an account on their
+  first vote **only if they hold the Member role**, and never as the owner (ownership can only be
+  claimed by signing in on the site).
+- **Same rules as the site.** Voting runs through the same code as the site, so vote slots (shared
+  between Discord and the site), stages where voting is closed, blocked people, the Member role and the
+  minimum time in the server all apply identically. A vote takes two clicks, the second on a message
+  only the voter can see. A person's own identity is taken from the signed request, never from the
+  button, so one person can't vote as another (tested).
+- **Limits.** Per Discord account (20 clicks a minute) and per address.
+- **Posted text is untrusted.** Posts and replies disable all mentions, neutralise `@` and `<`, escape
+  Discord formatting, never include links other than ones the site chose, and stay inside Discord's size
+  limits (tested with hostile titles and bodies). Channel and message IDs are validated as Discord IDs,
+  and the database refuses anything else.
+- **The bot's permissions** needed for this are View Channel, Send Messages and Embed Links, in the
+  channel(s) the owner chooses.
 
 ### A09 Security logging and alerting failures
 
@@ -159,6 +193,12 @@ owner tools to see who voted, strike a vote, and block someone.
 - There is no CAPTCHA or bot detection. Everyone who can write has already passed Discord and the
   Member role.
 - Suggestions are text only, by design, to avoid file uploads.
+- **The Discord board trusts Discord.** Whoever controls the Discord application (its token, or by
+  changing its public key and endpoint) controls what that endpoint accepts. Keep the application's
+  settings and the bot token private, and only give the developer portal to people you'd trust with
+  the server.
+- If the server's clock is wrong by more than five minutes, Discord's requests are refused. Keep time
+  synchronised (most hosts do this already).
 - Container images aren't pinned by digest, and the project isn't signed or attested.
 
 ## For people running it
@@ -167,5 +207,6 @@ owner tools to see who voted, strike a vote, and block someone.
 - Keep `.env` private (`SESSION_SECRET`, the Discord client secret and the bot token are secrets).
   If one leaks, rotate it in the Discord portal and in `.env`.
 - Sign in as the owner yourself before announcing the address, or set `OWNER_DISCORD_ID`.
-- Keep the Discord bot's permissions minimal: it needs no permissions, only to be in the server.
+- Keep the Discord bot's permissions minimal: for sign-in it needs none, only to be in the server. If you
+  use the Discord board it also needs View Channel, Send Messages and Embed Links, in those channels only.
 - Back up the database, and keep Docker, the host and this project up to date.

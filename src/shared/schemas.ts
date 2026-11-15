@@ -97,6 +97,19 @@ export const webhookSchema = z.object({
   url: z.string().trim().max(300),
 });
 
+// ── Discord board ────────────────────────────────────────────────────
+
+const channelId = z.string().trim().regex(/^(\d{5,25})?$/, "Paste the channel's ID: digits only");
+
+export const discordBoardSchema = z.object({
+  enabled: z.boolean(),
+  /** Empty string means "none". */
+  channelId,
+  roadmapChannelId: channelId,
+});
+
+export const postAllSchema = z.object({ includeClosed: z.boolean().default(false) });
+
 // ── Statuses, types, tags, guidelines ────────────────────────────────
 
 export const statusSchema = z.object({

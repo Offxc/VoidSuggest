@@ -1,5 +1,6 @@
 import { Prisma, prisma, type Settings, type User } from "./db";
 import { audit } from "./audit";
+import { scheduleBoardSync } from "./board";
 import { conflict, forbidden, notFound } from "./errors";
 import { participationBlock } from "./eligibility";
 import { getSettings } from "./settings";
@@ -77,7 +78,7 @@ export async function castVote(actor: User, publicId: string): Promise<VoteResul
   const block = participationBlock(actor, settings);
   if (block) throw forbidden(block.message, block.code);
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const locked = await lockVoterAndSuggestion(tx, actor.id, publicId);
     const status = await tx.status.findUniqueOrThrow({ where: { id: locked.statusId! } });
     if (!status.votingOpen) throw conflict("voting_closed", "Voting is closed for this suggestion.");
@@ -103,6 +104,8 @@ export async function castVote(actor: User, publicId: string): Promise<VoteResul
     });
     return { voteCount, hasVoted: true, budget: await budgetFor(tx, actor.id, settings) };
   });
+  scheduleBoardSync();
+  return result;
 }
 
 export async function retractVote(actor: User, publicId: string): Promise<VoteResult> {
@@ -110,7 +113,7 @@ export async function retractVote(actor: User, publicId: string): Promise<VoteRe
   const block = participationBlock(actor, settings, { tenure: false });
   if (block) throw forbidden(block.message, block.code);
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const locked = await lockVoterAndSuggestion(tx, actor.id, publicId);
     const status = await tx.status.findUniqueOrThrow({ where: { id: locked.statusId! } });
     // Once voting has closed, the tally is part of the record and stays as it was.
@@ -126,6 +129,8 @@ export async function retractVote(actor: User, publicId: string): Promise<VoteRe
     });
     return { voteCount, hasVoted: false, budget: await budgetFor(tx, actor.id, settings) };
   });
+  scheduleBoardSync();
+  return result;
 }
 
 /**
@@ -138,6 +143,7 @@ export async function removeVotesForUser(tx: Tx, userId: string, options: { only
         SELECT 1 FROM "Suggestion" s JOIN "Status" st ON st."id" = s."statusId"
         WHERE s."id" = v."suggestionId" AND st."votingOpen")`
     : Prisma.empty;
+  scheduleBoardSync();
   return tx.$executeRaw`
     WITH removed AS (
       DELETE FROM "Vote" v WHERE v."userId" = ${userId} ${scope} RETURNING v."suggestionId"
@@ -184,6 +190,7 @@ export async function strikeVote(actor: User, publicId: string, voterId: string,
       });
     }
   });
+  scheduleBoardSync();
   await audit({
     action: "vote.strike",
     actor,

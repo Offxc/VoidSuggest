@@ -88,32 +88,43 @@ model User {
 
 /// Exactly one row (id = 1), enforced by a CHECK constraint.
 model Settings {
-  id                   Int          @id @default(1)
-  siteName             String       @default("VoidSuggest") @db.VarChar(60)
-  introText            String?      @db.VarChar(1000)
-  accentColor          String       @default("purple") @db.VarChar(16)
-  discordInviteUrl     String?      @db.VarChar(200)
-  memberRoleId         String?      @db.VarChar(32)
+  id                      Int          @id @default(1)
+  siteName                String       @default("VoidSuggest") @db.VarChar(60)
+  introText               String?      @db.VarChar(1000)
+  accentColor             String       @default("purple") @db.VarChar(16)
+  discordInviteUrl        String?      @db.VarChar(200)
+  memberRoleId            String?      @db.VarChar(32)
   /// Votes a member can have on open suggestions at once. NULL = unlimited.
-  voteSlots            Int?         @default(5)
-  minDaysInServer      Int          @default(0)
-  submissionsOpen      Boolean      @default(true)
-  maxPendingPerUser    Int          @default(3)
-  maxSubmissionsPerDay Int          @default(3)
-  maxTagsPerSuggestion Int          @default(3)
-  requireGuidelinesAck Boolean      @default(false)
-  guidelinesVersion    Int          @default(1)
+  voteSlots               Int?         @default(5)
+  minDaysInServer         Int          @default(0)
+  submissionsOpen         Boolean      @default(true)
+  maxPendingPerUser       Int          @default(3)
+  maxSubmissionsPerDay    Int          @default(3)
+  maxTagsPerSuggestion    Int          @default(3)
+  requireGuidelinesAck    Boolean      @default(false)
+  guidelinesVersion       Int          @default(1)
   /// Only OFF or OPEN are valid here.
-  defaultCommentsMode  CommentsMode @default(OFF)
-  removeVotesOnLeave   Boolean      @default(true)
+  defaultCommentsMode     CommentsMode @default(OFF)
+  removeVotesOnLeave      Boolean      @default(true)
   /// Encrypted at rest; never returned to the browser.
-  webhookUrlEnc        String?
-  notifyPending        Boolean      @default(true)
-  notifyStatusChange   Boolean      @default(false)
+  webhookUrlEnc           String?
+  notifyPending           Boolean      @default(true)
+  notifyStatusChange      Boolean      @default(false)
+  /// Post approved suggestions to a Discord channel, with a vote button.
+  discordBoardEnabled     Boolean      @default(false)
+  discordChannelId        String?      @db.VarChar(25)
+  /// When the board was switched on. Suggestions approved after this are
+  /// posted automatically; older ones only when the owner asks.
+  discordBoardSince       DateTime?
+  /// Optional channel for a single, self-updating overview of the stages.
+  discordRoadmapChannelId String?      @db.VarChar(25)
+  discordRoadmapMessageId String?      @db.VarChar(25)
+  /// Hash of what that message last showed, so it is only edited when it changes.
+  discordRoadmapHash      String?      @db.VarChar(64)
   /// Set once the starter statuses, types and guidelines exist, so deleting
   /// one later is not undone on the next boot.
-  seededAt             DateTime?
-  updatedAt            DateTime     @updatedAt
+  seededAt                DateTime?
+  updatedAt               DateTime     @updatedAt
 }
 
 model Status {
@@ -180,26 +191,34 @@ model GuidelineType {
 // ── Suggestions ──────────────────────────────────────────────────────
 
 model Suggestion {
-  id              String        @id @default(cuid())
+  id               String        @id @default(cuid())
   /// Random, non-sequential id used in URLs.
-  publicId        String        @unique @db.VarChar(12)
-  authorId        String
-  title           String        @db.VarChar(120)
-  body            String        @db.VarChar(4000)
-  typeId          String?
-  approval        ApprovalState @default(PENDING)
-  rejectionReason String?       @db.VarChar(500)
+  publicId         String        @unique @db.VarChar(12)
+  authorId         String
+  title            String        @db.VarChar(120)
+  body             String        @db.VarChar(4000)
+  typeId           String?
+  approval         ApprovalState @default(PENDING)
+  rejectionReason  String?       @db.VarChar(500)
   /// Null until approved (CHECK constraint keeps these in step).
-  statusId        String?
+  statusId         String?
   /// Denormalised count of Vote rows, kept in step inside the same
   /// transaction as every vote change. Used for sorting.
-  voteCount       Int           @default(0)
-  commentCount    Int           @default(0)
-  commentsMode    CommentsMode  @default(OFF)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  approvedAt      DateTime?
-  statusChangedAt DateTime?
+  voteCount        Int           @default(0)
+  commentCount     Int           @default(0)
+  commentsMode     CommentsMode  @default(OFF)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  approvedAt       DateTime?
+  statusChangedAt  DateTime?
+  /// Where this suggestion was posted in Discord (both set or both null).
+  discordChannelId String?       @db.VarChar(25)
+  discordMessageId String?       @db.VarChar(25)
+  /// Hash of what the post last showed, so it is only edited when it changes.
+  discordPostHash  String?       @db.VarChar(64)
+  /// Set the first time it is posted and never cleared, so a post someone
+  /// deleted by hand is not recreated behind their back.
+  discordPostedAt  DateTime?
 
   author   User            @relation(fields: [authorId], references: [id], onDelete: Restrict)
   type     SuggestionType? @relation(fields: [typeId], references: [id], onDelete: SetNull)

@@ -4,6 +4,7 @@ import { LIMITS } from "../shared/constants";
 import type { guidelineSchema, settingsSchema, statusSchema, tagSchema, typeSchema } from "../shared/schemas";
 import { slugify } from "../shared/text";
 import { audit } from "./audit";
+import { scheduleBoardSync } from "./board";
 import { encryptSecret } from "./crypto";
 import { parseWebhookUrl } from "./discord";
 import { badRequest, conflict, forbidden, notFound } from "./errors";
@@ -144,6 +145,7 @@ export async function updateStatus(actor: User, id: string, input: StatusInput, 
       },
     });
   });
+  scheduleBoardSync();
   await audit({ action: "status.update", actor, targetType: "status", targetId: id, details: { ...input }, request });
 }
 
@@ -165,7 +167,7 @@ export async function deleteStatus(actor: User, id: string, request?: Request): 
 export const reorderStatuses = (actor: User, ids: string[]) =>
   reorder(actor, ids, () => prisma.status.findMany({ select: { id: true } }), (tx, id, sortOrder) =>
     tx.status.update({ where: { id }, data: { sortOrder } }),
-  );
+  ).then(() => scheduleBoardSync());
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -220,6 +222,7 @@ export async function updateType(actor: User, id: string, input: TypeInput, requ
       },
     });
   });
+  scheduleBoardSync();
   await audit({ action: "type.update", actor, targetType: "type", targetId: id, details: { ...input }, request });
 }
 
@@ -273,6 +276,7 @@ export async function updateTag(actor: User, id: string, input: TagInput, reques
     }
     await tx.tag.update({ where: { id }, data: { name: input.name, color: input.color } });
   });
+  scheduleBoardSync();
   await audit({ action: "tag.update", actor, targetType: "tag", targetId: id, details: { ...input }, request });
 }
 
@@ -281,6 +285,7 @@ export async function deleteTag(actor: User, id: string, request?: Request): Pro
   assertOwner(actor);
   const result = await prisma.tag.deleteMany({ where: { id } });
   if (result.count === 0) throw notFound("Tag not found.");
+  scheduleBoardSync();
   await audit({ action: "tag.delete", actor, targetType: "tag", targetId: id, request });
 }
 

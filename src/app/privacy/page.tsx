@@ -20,7 +20,7 @@ export default async function PrivacyPage() {
         <h3>What is stored</h3>
         <ul>
           <li>
-            When you sign in with Discord: your Discord user ID, your username and display name, your server nickname, your avatar, whether you
+            When you sign in with Discord, or the first time you vote with a button in Discord: your Discord user ID, your username and display name, your server nickname, your avatar, whether you
             hold the Member role, and when you joined the server.
           </li>
           <li>What you post: suggestions, comments and votes, with the time you made them.</li>
@@ -35,6 +35,12 @@ export default async function PrivacyPage() {
           <li>Your email address, messages, or anything else from your Discord account.</li>
           <li>Analytics or advertising data. This site does not use trackers or third-party scripts.</li>
         </ul>
+        <h3>In Discord</h3>
+        <p>
+          If the server uses the Discord board, approved suggestions are posted in a channel there, with the suggestion's text, its type and tags,
+          its stage and vote count, and the name of the person who suggested it. Voting with a button uses the same information as voting on
+          the site, and your votes there and here are one and the same.
+        </p>
         <h3>Cookies</h3>
         <p>One cookie keeps you signed in. A short-lived one is used during the sign-in step. There are no tracking cookies.</p>
         <h3>Who can see what</h3>

@@ -31,7 +31,7 @@ async function request(
 ): Promise<Response> {
   const env = getEnv();
   const headers: Record<string, string> = {
-    "User-Agent": "DiscordBot (https://github.com/Offxc/VoidSuggest, 0.1.0)",
+    "User-Agent": "DiscordBot (https://github.com/Offxc/VoidSuggest, 0.2.0)",
     ...init.headers,
   };
   if ("bot" in auth) headers.Authorization = `Bot ${env.DISCORD_BOT_TOKEN}`;
@@ -176,6 +176,15 @@ export async function fetchGuildMember(discordId: string): Promise<GuildMember |
   return normaliseMember(parsed.data);
 }
 
+/**
+ * A member as Discord includes them in a signed interaction. Same shape as the
+ * member API, so it goes through the same validation. Null if it doesn't fit.
+ */
+export function parseMember(raw: unknown): GuildMember | null {
+  const parsed = memberSchema.safeParse(raw);
+  return parsed.success ? normaliseMember(parsed.data) : null;
+}
+
 const userSchema = memberSchema.shape.user;
 
 /**
@@ -244,6 +253,94 @@ export async function listGuildRoles(): Promise<GuildRole[]> {
     }
   }
   return roles.sort((a, b) => b.position - a.position);
+}
+
+// ── Channels and messages (the Discord board) ────────────────────────
+
+/** Calls that post to a channel wait out a rate limit a few times rather than give up at once. */
+const BOARD_RETRIES = 3;
+
+export interface MessagePayload {
+  content?: string;
+  embeds?: unknown[];
+  components?: unknown[];
+  flags?: number;
+  /** Always set, so nothing in a message can ping anyone. */
+  allowed_mentions: { parse: [] };
+}
+
+function snowflakeOrThrow(value: string): string {
+  if (!snowflake.safeParse(value).success) throw new DiscordError("Not a valid Discord ID", 400);
+  return value;
+}
+
+const channelSchema = z.object({
+  id: snowflake,
+  type: z.number().int(),
+  guild_id: snowflake.optional(),
+  name: z.string().max(100).optional(),
+});
+
+export interface ChannelInfo {
+  id: string;
+  name: string;
+  /** 0 is an ordinary text channel, 5 an announcement channel. */
+  type: number;
+  guildId: string | null;
+}
+
+export async function fetchChannel(channelId: string): Promise<ChannelInfo> {
+  const res = await request(`/channels/${snowflakeOrThrow(channelId)}`, {}, { bot: true });
+  if (!res.ok) throw new DiscordError("Could not read that channel", res.status);
+  const parsed = channelSchema.safeParse(await res.json().catch(() => null));
+  if (!parsed.success) throw new DiscordError("Unexpected response from Discord", 502);
+  return {
+    id: parsed.data.id,
+    name: cleanLine(parsed.data.name ?? "").slice(0, 100),
+    type: parsed.data.type,
+    guildId: parsed.data.guild_id ?? null,
+  };
+}
+
+const createdMessageSchema = z.object({ id: snowflake, embeds: z.array(z.unknown()).optional() });
+
+/**
+ * Posts a message and returns its id. `embedCount` is how many embeds Discord
+ * kept: a bot without the "Embed Links" permission gets its embeds dropped
+ * silently, and this is how that shows up.
+ */
+export async function createMessage(channelId: string, payload: MessagePayload): Promise<{ id: string; embedCount: number }> {
+  const res = await request(
+    `/channels/${snowflakeOrThrow(channelId)}/messages`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+    { bot: true },
+    BOARD_RETRIES,
+  );
+  if (!res.ok) throw new DiscordError("Discord rejected the message", res.status);
+  const parsed = createdMessageSchema.safeParse(await res.json().catch(() => null));
+  if (!parsed.success) throw new DiscordError("Unexpected response from Discord", 502);
+  return { id: parsed.data.id, embedCount: parsed.data.embeds?.length ?? 0 };
+}
+
+export async function editMessage(channelId: string, messageId: string, payload: MessagePayload): Promise<void> {
+  const res = await request(
+    `/channels/${snowflakeOrThrow(channelId)}/messages/${snowflakeOrThrow(messageId)}`,
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+    { bot: true },
+    BOARD_RETRIES,
+  );
+  if (!res.ok) throw new DiscordError("Discord rejected the edit", res.status);
+}
+
+/** A message that is already gone counts as deleted. */
+export async function deleteMessage(channelId: string, messageId: string): Promise<void> {
+  const res = await request(
+    `/channels/${snowflakeOrThrow(channelId)}/messages/${snowflakeOrThrow(messageId)}`,
+    { method: "DELETE" },
+    { bot: true },
+    BOARD_RETRIES,
+  );
+  if (!res.ok && res.status !== 404) throw new DiscordError("Discord rejected the delete", res.status);
 }
 
 // ── Avatars ──────────────────────────────────────────────────────────

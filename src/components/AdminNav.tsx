@@ -16,6 +16,7 @@ const SETTINGS = [
   { href: "/admin/settings/tags", label: "Tags" },
   { href: "/admin/settings/guidelines", label: "Guidelines" },
   { href: "/admin/settings/notifications", label: "Notifications" },
+  { href: "/admin/settings/discord", label: "Discord board" },
 ];
 
 export function AdminNav({ pending }: { pending: number }) {

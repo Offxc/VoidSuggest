@@ -49,7 +49,7 @@ describe("route inventory", () => {
   it("builds every handler with defineApi, so each one declares who may call it", () => {
     for (const r of routes) {
       expect(r.handler.meta, `${r.method} ${r.urlPath} is not built with defineApi`).toBeDefined();
-      expect(["public", "member", "owner"]).toContain(r.handler.meta.auth);
+      expect(["public", "member", "owner", "discord"]).toContain(r.handler.meta.auth);
     }
   });
 
@@ -68,6 +68,12 @@ describe("route inventory", () => {
       "GET /api/suggestions/similar",
       "POST /api/auth/logout",
     ]);
+  });
+
+  it("has exactly one route that skips sessions, and it is the signed Discord endpoint", () => {
+    const signed = routes.filter((r) => r.handler.meta.auth === "discord").map((r) => `${r.method} ${r.urlPath}`);
+    expect(signed).toEqual(["POST /api/discord/interactions"]);
+    expect(routes.find((r) => r.urlPath === "/api/discord/interactions")!.handler.meta.rate).toBeDefined();
   });
 
   it("rate-limits every route that signs people in or takes free text from the public", () => {
@@ -123,7 +129,9 @@ describe("who gets through", () => {
 describe("request hygiene on every state-changing route", () => {
   it("blocks cross-site requests, even from the owner's own browser", async () => {
     const owner = await makeUser({ owner: true });
-    for (const r of routes.filter((x) => x.method !== "GET")) {
+    // The Discord endpoint is called by Discord's servers, which send no Origin header. It is
+    // protected by a signature instead, and tested in interactions.test.ts.
+    for (const r of routes.filter((x) => x.method !== "GET" && x.handler.meta.auth !== "discord")) {
       const wrongOrigin = await call(r.handler, { method: r.method, path: r.urlPath, params: PARAMS, user: owner, body: {}, origin: "https://evil.example" });
       const noOrigin = await call(r.handler, { method: r.method, path: r.urlPath, params: PARAMS, user: owner, body: {}, origin: null });
       expect(wrongOrigin.status, `${r.method} ${r.urlPath} (wrong origin)`).toBe(403);

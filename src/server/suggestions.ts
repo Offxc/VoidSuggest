@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { Prisma, prisma, type Settings, type User } from "./db";
 import type { createSuggestionSchema, editSuggestionSchema } from "../shared/schemas";
 import { audit } from "./audit";
+import { removePost, scheduleBoardSync } from "./board";
 import { randomPublicId } from "./crypto";
 import { participationBlock } from "./eligibility";
 import { badRequest, conflict, forbidden, notFound } from "./errors";
@@ -161,6 +162,7 @@ export async function createSuggestion(
   });
 
   await audit({ action: "suggestion.submit", actor, targetType: "suggestion", targetId: created.publicId, request });
+  if (created.approval === "APPROVED") scheduleBoardSync();
   if (created.approval === "PENDING") {
     void announcePending({
       publicId: created.publicId,
@@ -219,6 +221,7 @@ export async function updateSuggestion(actor: User, publicId: string, input: Edi
   });
 
   if (editedByOwner) {
+    scheduleBoardSync();
     await audit({
       action: "suggestion.edit",
       actor,
@@ -231,7 +234,7 @@ export async function updateSuggestion(actor: User, publicId: string, input: Edi
 }
 
 export async function deleteSuggestion(actor: User, publicId: string, request?: Request): Promise<void> {
-  await prisma.$transaction(async (tx) => {
+  const post = await prisma.$transaction(async (tx) => {
     const id = await lockSuggestion(tx, publicId);
     const s = await tx.suggestion.findUniqueOrThrow({ where: { id } });
     if (!actor.isOwner) {
@@ -241,7 +244,13 @@ export async function deleteSuggestion(actor: User, publicId: string, request?: 
       }
     }
     await tx.suggestion.delete({ where: { id } });
+    return { channelId: s.discordChannelId, messageId: s.discordMessageId };
   });
+  // Take its post down too, and let the stages overview drop it.
+  if (post.messageId) {
+    void removePost(post.channelId, post.messageId);
+    scheduleBoardSync();
+  }
   if (actor.isOwner) {
     await audit({ action: "suggestion.delete", actor, targetType: "suggestion", targetId: publicId, request });
   }
@@ -275,6 +284,7 @@ export async function approveSuggestion(actor: User, publicId: string, request?:
       { userId: s.authorId, kind: "SUGGESTION_APPROVED", suggestionId: id, suggestionTitle: s.title, statusName: status.name },
     ]);
   });
+  scheduleBoardSync();
   await audit({ action: "suggestion.approve", actor, targetType: "suggestion", targetId: publicId, request });
 }
 
@@ -358,6 +368,7 @@ export async function moveSuggestion(actor: User, publicId: string, statusId: st
   });
 
   if (announce) {
+    scheduleBoardSync();
     await audit({
       action: "suggestion.move",
       actor,

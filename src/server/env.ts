@@ -20,6 +20,9 @@ const schema = z.object({
   DISCORD_CLIENT_SECRET: z.string().min(8, "is required"),
   DISCORD_BOT_TOKEN: z.string().min(20, "is required"),
   DISCORD_GUILD_ID: snowflake,
+  // From the developer portal (General Information). Lets the site check that
+  // button clicks really come from Discord. Without it, the Discord board is off.
+  DISCORD_PUBLIC_KEY: optional(z.string().trim().regex(/^[0-9a-fA-F]{64}$/, "must be the 64-character public key from the developer portal")),
   OWNER_DISCORD_ID: optional(snowflake),
   CLIENT_IP_HEADER: z.preprocess(blankToUndefined, z.string().trim().toLowerCase().default("x-forwarded-for")),
   CONTACT_EMAIL: optional(z.email()),

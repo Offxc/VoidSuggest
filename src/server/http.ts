@@ -8,6 +8,7 @@ import { ensureFresh } from "./identity";
 import { clientIp, rateLimit } from "./rate-limit";
 import { readCookie, sessionCookieName, userFromToken } from "./session";
 import { getSettings } from "./settings";
+import { verifyInteraction } from "./signature";
 
 /**
  * Every API route is built with `defineApi`. It is the one place that
@@ -24,10 +25,16 @@ import { getSettings } from "./settings";
  * checks the declaration is present and actually enforced.
  */
 
-export type AuthLevel = "public" | "member" | "owner";
+/**
+ * `discord` is for the one endpoint Discord itself calls. It has no session and
+ * no Origin header; instead the request must carry a valid Ed25519 signature.
+ */
+export type AuthLevel = "public" | "member" | "owner" | "discord";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const MAX_BODY_BYTES = 32 * 1024;
+// Interactions carry a copy of the message that was clicked, so they are larger than our own requests.
+const MAX_SIGNED_BODY_BYTES = 128 * 1024;
 
 export interface RateRule {
   /** Shared by every route that should count against the same allowance. */
@@ -39,7 +46,7 @@ export interface RateRule {
 
 export type ApiContext<A extends AuthLevel, B, Q> = {
   req: Request;
-  user: A extends "public" ? null : User;
+  user: A extends "public" | "discord" ? null : User;
   body: B;
   query: Q;
   params: Record<string, string>;
@@ -106,6 +113,31 @@ async function readJson(req: Request): Promise<unknown> {
   }
 }
 
+/**
+ * Reads the body exactly as received and checks Discord's signature over it,
+ * before anything is parsed. Returns the parsed JSON.
+ */
+async function readSignedJson(req: Request, ip: string): Promise<unknown> {
+  const declared = Number(req.headers.get("content-length") ?? 0);
+  if (declared > MAX_SIGNED_BODY_BYTES) throw new HttpError(413, "too_large", "That request is too large.");
+  const text = await req.text();
+  if (text.length > MAX_SIGNED_BODY_BYTES) throw new HttpError(413, "too_large", "That request is too large.");
+
+  if (!verifyInteraction(req.headers, text)) {
+    await auditThrottled(`signature:${ip}`, {
+      action: "discord.bad_signature",
+      outcome: "DENIED",
+      request: req,
+    });
+    throw new HttpError(401, "invalid_signature", "Invalid request signature.");
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new HttpError(400, "invalid_json", "That request wasn't valid JSON.");
+  }
+}
+
 function validate<T>(schema: z.ZodType<T>, input: unknown): T {
   const parsed = schema.safeParse(input);
   if (parsed.success) return parsed.data;
@@ -122,13 +154,14 @@ export function defineApi<A extends AuthLevel, B = undefined, Q = undefined>(
     try {
       const ip = clientIp(req.headers);
 
-      if (!SAFE_METHODS.has(req.method)) assertSameOrigin(req);
+      const signed = options.auth === "discord";
+      if (!SAFE_METHODS.has(req.method) && !signed) assertSameOrigin(req);
 
       const rule = options.rate;
       if (rule && (rule.per ?? "ip") === "ip") enforceRate(rule, `ip:${ip}`, req, null);
 
       let user: User | null = null;
-      if (options.auth !== "public") {
+      if (options.auth === "member" || options.auth === "owner") {
         user = await userFromToken(readCookie(req.headers, sessionCookieName()));
         if (!user) throw unauthorized();
         actor = user;
@@ -143,7 +176,8 @@ export function defineApi<A extends AuthLevel, B = undefined, Q = undefined>(
         if (rule?.per === "user") enforceRate(rule, `user:${user.id}`, req, user);
       }
 
-      const body = options.body ? validate(options.body, await readJson(req)) : (undefined as B);
+      const json = signed ? await readSignedJson(req, ip) : options.body ? await readJson(req) : undefined;
+      const body = options.body ? validate(options.body, json) : (undefined as B);
       const query = options.query
         ? validate(options.query, Object.fromEntries(new URL(req.url).searchParams))
         : (undefined as Q);
