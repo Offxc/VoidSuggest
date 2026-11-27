@@ -35,6 +35,9 @@ WORKDIR /app
 COPY --from=build --chown=app:app /app/.next/standalone ./
 COPY --from=build --chown=app:app /app/.next/static ./.next/static
 COPY --from=build --chown=app:app /app/public ./public
+# The image library is a native module. Make the image build fail here, in CI, if it
+# isn't present or can't load on this platform, rather than the first upload failing.
+RUN node -e "require('sharp')({create:{width:2,height:2,channels:3,background:'#000'}}).webp().toBuffer().then(b=>process.exit(b.length>0?0:1)).catch(e=>{console.error(e.message);process.exit(1)})"
 USER app
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \

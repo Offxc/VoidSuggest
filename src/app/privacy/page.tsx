@@ -25,6 +25,11 @@ export default async function PrivacyPage() {
           </li>
           <li>What you post: suggestions, comments and votes, with the time you made them.</li>
           <li>
+            Pictures you attach to a suggestion. The site keeps its own re-saved copy, not the file you sent, so location and camera details in the
+            original are not kept. Until the suggestion is approved only you and the owner can see them; after that anyone can. They are deleted a
+            set number of days after the suggestion is completed.
+          </li>
+          <li>
             A security log of sign-ins, sign-outs and moderation actions, including the IP address and browser name of the request. It is
             visible only to the site owner.
           </li>

@@ -65,6 +65,8 @@ describe("route inventory", () => {
       "GET /api/auth/callback",
       "GET /api/auth/login",
       "GET /api/health",
+      // Pictures on approved suggestions are public; the route itself hides the rest (tested in images.test.ts).
+      "GET /api/images/x",
       "GET /api/suggestions/similar",
       "POST /api/auth/logout",
     ]);

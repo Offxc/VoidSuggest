@@ -25,6 +25,8 @@ export interface StatusDto {
   votingOpen: boolean;
   closesCommentsOnEntry: boolean;
   showOnRoadmap: boolean;
+  /** Pictures on a suggestion are deleted this many days after it moved here. Null keeps them. */
+  imageRetentionDays: number | null;
 }
 
 export interface TypeDto {
@@ -72,11 +74,20 @@ export interface SuggestionCardDto {
   createdAt: string;
   author: PersonDto;
   viewerHasVoted: boolean;
+  imageCount: number;
+}
+
+export interface SuggestionImageDto {
+  id: string;
+  /** Where the picture is served from. */
+  url: string;
+  width: number;
+  height: number;
 }
 
 export interface TimelineDto {
   id: string;
-  kind: "SUBMITTED" | "APPROVED" | "STATUS_CHANGED" | "COMMENTS_OPENED" | "COMMENTS_CLOSED" | "EDITED";
+  kind: "SUBMITTED" | "APPROVED" | "STATUS_CHANGED" | "COMMENTS_OPENED" | "COMMENTS_CLOSED" | "EDITED" | "IMAGES_REMOVED";
   fromStatusName: string | null;
   toStatusName: string | null;
   createdAt: string;
@@ -88,6 +99,7 @@ export interface SuggestionDetailDto extends SuggestionCardDto {
   rejectionReason: string | null;
   timeline: TimelineDto[];
   viewerIsAuthor: boolean;
+  images: SuggestionImageDto[];
 }
 
 export interface CommentDto {

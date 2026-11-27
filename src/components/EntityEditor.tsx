@@ -14,6 +14,7 @@ export type FieldDef =
   | { kind: "color"; key: string; label: string }
   | { kind: "icon"; key: string; label: string }
   | { kind: "switch"; key: string; label: string; hint?: string; lockedWhenOn?: string }
+  | { kind: "number"; key: string; label: string; min: number; max: number; hint?: string; placeholder?: string }
   | { kind: "types"; key: string; label: string; options: TypeDto[]; onlyWhenFalse: string };
 
 type Draft = Record<string, unknown>;
@@ -80,6 +81,26 @@ function FieldInput({ field, draft, set, idPrefix }: { field: FieldDef; draft: D
           </div>
         </div>
       );
+    case "number": {
+      const value = draft[field.key];
+      return (
+        <div className="field">
+          <label htmlFor={id}>{field.label}</label>
+          <input
+            id={id}
+            className="input input-sm"
+            type="number"
+            inputMode="numeric"
+            min={field.min}
+            max={field.max}
+            placeholder={field.placeholder}
+            value={value === null || value === undefined ? "" : String(value)}
+            onChange={(e) => set(field.key, e.target.value === "" ? null : Number(e.target.value))}
+          />
+          {field.hint && <span className="hint">{field.hint}</span>}
+        </div>
+      );
+    }
     case "switch": {
       const locked = Boolean(field.lockedWhenOn && draft[field.lockedWhenOn]);
       return (

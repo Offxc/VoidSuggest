@@ -37,6 +37,7 @@ export function toStatus(s: Status): StatusDto {
     votingOpen: s.votingOpen,
     closesCommentsOnEntry: s.closesCommentsOnEntry,
     showOnRoadmap: s.showOnRoadmap,
+    imageRetentionDays: s.imageRetentionDays,
   };
 }
 
@@ -104,6 +105,7 @@ export interface SuggestionRow {
   type: SuggestionType | null;
   status: Status | null;
   tags: { tag: Tag }[];
+  _count: { images: number };
 }
 
 export function toCard(row: SuggestionRow, viewerHasVoted: boolean): SuggestionCardDto {
@@ -121,11 +123,18 @@ export function toCard(row: SuggestionRow, viewerHasVoted: boolean): SuggestionC
     createdAt: row.createdAt.toISOString(),
     author: toPerson(row.author),
     viewerHasVoted,
+    imageCount: row._count.images,
   };
 }
 
+/** Where a stored picture is served from. The `.webp` is for Discord, which wants to see a file type. */
+export const imageUrl = (id: string): string => `/api/images/${id}.webp`;
+
 export function toDetail(
-  row: SuggestionRow & { timeline: { id: string; kind: TimelineDto["kind"]; fromStatusName: string | null; toStatusName: string | null; createdAt: Date }[] },
+  row: SuggestionRow & {
+    timeline: { id: string; kind: TimelineDto["kind"]; fromStatusName: string | null; toStatusName: string | null; createdAt: Date }[];
+    images: { id: string; width: number; height: number }[];
+  },
   viewer: { id: string; isOwner: boolean } | null,
   viewerHasVoted: boolean,
 ): SuggestionDetailDto {
@@ -136,6 +145,7 @@ export function toDetail(
     // The reason for a rejection is for the person it concerns, not the public.
     rejectionReason: isAuthor || viewer?.isOwner ? row.rejectionReason : null,
     viewerIsAuthor: isAuthor,
+    images: row.images.map((i) => ({ id: i.id, url: imageUrl(i.id), width: i.width, height: i.height })),
     timeline: row.timeline.map((t) => ({
       id: t.id,
       kind: t.kind,

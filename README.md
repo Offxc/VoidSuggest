@@ -48,6 +48,7 @@ default), and the owner can see who voted, remove a vote, or block someone.
 **For members**
 - Submit, edit (while it waits for approval) and withdraw suggestions
 - Vote, with a clear "3 of 5 votes left" counter and a "my votes" page
+- Attach up to four **images** (PNG, JPEG or WebP) to a suggestion; they're checked and re-saved by the site, so location and camera details are removed
 - Comment, on the suggestions where the owner has switched comments on
 - A "similar suggestions" check while typing a title, to cut down on duplicates
 - In-site notices for approvals, status changes and returned votes
@@ -60,6 +61,7 @@ default), and the owner can see who voted, remove a vote, or block someone.
 - **Tags** you create and edit
 - **Guidelines** you write, optionally per type, shown beside the form, with an optional "I've read them" confirmation
 - **Comments** switched on per suggestion, closing by themselves on any status you choose
+- **Images** are removed automatically a set number of days after a suggestion reaches a status you choose (30 days after *Completed* to begin with), set per status
 - Limits: votes per member, waiting suggestions per person, suggestions per day, tags per suggestion, days in server
 - Block people, strike votes, and an append-only **audit log** with CSV export
 - Optional Discord channel notifications through a webhook

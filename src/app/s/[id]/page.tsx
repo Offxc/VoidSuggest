@@ -45,6 +45,8 @@ function describe(e: TimelineDto): string {
       return "Comments closed";
     case "EDITED":
       return "Edited by the owner";
+    case "IMAGES_REMOVED":
+      return "Images removed";
   }
 }
 
@@ -119,6 +121,27 @@ export default async function SuggestionPage({ params }: { params: Promise<{ id:
           <div className="panel panel-pad">
             <Markdown>{detail.body}</Markdown>
           </div>
+
+          {detail.images.length > 0 && (
+            <section className="gallery" aria-label="Images">
+              {detail.images.map((img, i) => (
+                <figure key={img.id}>
+                  <a href={img.url} target="_blank" rel="noopener noreferrer" title="Open full size">
+                    <img src={img.url} width={img.width} height={img.height} alt={`Image ${i + 1} of ${detail.images.length}, added to this suggestion`} loading="lazy" />
+                  </a>
+                  {user?.isOwner && (
+                    <ActionButton
+                      method="DELETE"
+                      url={`/api/suggestions/${id}/images/${img.id}`}
+                      label="Remove image"
+                      className="btn btn-danger btn-sm"
+                      confirm="Remove this image?"
+                    />
+                  )}
+                </figure>
+              ))}
+            </section>
+          )}
 
           {approved && detail.commentsMode !== "OFF" && (
             <section className="stack" aria-labelledby="comments-title">

@@ -4,6 +4,23 @@ The version is in `package.json` and shown in the site footer. Bump it with ever
 for a fix, a minor for a feature or visible change. A change to the database schema ships with a
 migration and is called out here.
 
+## 0.3.0
+
+Adds image uploads. **The database schema changes** (a new migration, applied automatically before the
+site starts). Existing installs have image deletion set to 30 days on the *Completed* status.
+
+- Attach up to four pictures (PNG, JPEG or WebP, up to 8 MB each) to a suggestion. The site never
+  stores or serves the uploaded file: it makes a fresh WebP from the pixels, which removes anything
+  hidden in the file and any location or camera details. SVG, GIF, animated and oversized images are refused
+- Pictures are visible only to the author and the owner until the suggestion is approved, then public.
+  The owner can remove any picture; authors can add and remove them while a suggestion waits for approval
+- Each status has a new "Delete images after (days)" setting. Pictures are deleted that many days after
+  a suggestion moves into it, 30 on *Completed*. It's noted on the suggestion's history, and the picture
+  leaves the Discord post too
+- Discord posts show the suggestion's first picture
+- Security updates: Next.js 16.4.6 (fixes several advisories, including cookie and cache issues),
+  and a patched `effect` (used only by Prisma's command-line tools)
+
 ## 0.2.0
 
 Adds the Discord board. **The database schema changes** (a new migration, applied automatically

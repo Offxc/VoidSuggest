@@ -122,6 +122,38 @@ tests in `tests/`.
 - Nothing untrusted is deserialised into objects. The only inbound calls from another service are
   Discord's button clicks, and those are accepted only with a valid signature (see below).
 
+### Image uploads
+
+Members can attach up to four pictures to a suggestion. A file is the classic way into a web
+application, so the design is built around never trusting one:
+
+- **The uploaded file is never stored or served.** It is read once by an image library, and what is
+  kept is a **new WebP the server makes from the pixels** (`src/server/images.ts`). That removes
+  everything else a file can carry: script or HTML hidden after a valid image (a "polyglot"; tested),
+  location and camera details, colour-profile tricks, extra frames. Everything the owner or other members
+  see is that new file.
+- **Before that, the upload must clear:** a size limit (8 MB) enforced while the body streams in, so an
+  oversized upload is stopped early; the first bytes being PNG, JPEG or WebP (no SVG, no GIF, nothing
+  else) *and* the library agreeing with that; a limit on the number of pixels (50 million), checked from
+  the header before anything is decoded, so a tiny file that expands to gigabytes is refused (tested with
+  both a 144 million and a 1.6 billion pixel file, including a check that the tests fail if the limit is
+  removed); and not being animated. The browser's idea of the file's type is only an early filter.
+- **Stored in the database**, not on disk: no file paths to traverse or guess, backed up with everything
+  else, and deleted with the suggestion. The database itself refuses a picture that isn't a WebP, is over
+  2 MB, has silly dimensions, or would be a fifth on a suggestion.
+- **Served safely:** always as `image/webp` with `X-Content-Type-Options: nosniff`. A picture on an
+  approved suggestion is public; on one that isn't approved yet it is visible to its author and the owner
+  only, and anyone else gets the same "not found" as for a made-up address (tested). Those are never cached.
+- **Who may add or remove:** the owner at any time; the author only while the suggestion waits for approval,
+  like editing its text. Enforced in the domain functions as well as the routes (tested). Uploads are rate
+  limited per person, processing runs a couple at a time, and the audit log records each one (not the picture).
+- **Deleted on a schedule.** Each status has a "delete images after N days" setting, and "Completed" starts
+  at 30. An hourly job removes the pictures of suggestions that have been in such a status that long (the
+  clock restarts if a suggestion leaves and returns), notes it on the suggestion's public history and in the
+  audit log, and takes the picture out of the Discord post. Tested, including the boundary at 29 and 31 days.
+- The content-security policy allows `blob:` images, only so the form can preview a picture a person has
+  just chosen, before it is sent.
+
 ### The Discord board (optional)
 
 If the owner switches it on, approved suggestions are posted to a Discord channel with a Vote
@@ -192,7 +224,11 @@ owner tools to see who voted, strike a vote, and block someone.
 - A stolen session cookie works until the account signs out, is blocked, or the cookie expires.
 - There is no CAPTCHA or bot detection. Everyone who can write has already passed Discord and the
   Member role.
-- Suggestions are text only, by design, to avoid file uploads.
+- **Pictures are the one kind of file the site accepts**, and they are unscanned for content: the site
+  makes sure a picture is a picture and nothing else, not that it is appropriate. The owner sees every
+  suggestion's pictures before approving it and can remove any of them afterwards.
+- A picture that Discord has already fetched for a post may stay in Discord's own image cache for a
+  while after the site deletes it. The post stops showing it, but the site can't recall Discord's copy.
 - **The Discord board trusts Discord.** Whoever controls the Discord application (its token, or by
   changing its public key and endpoint) controls what that endpoint accepts. Keep the application's
   settings and the bot token private, and only give the developer portal to people you'd trust with

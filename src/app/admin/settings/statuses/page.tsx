@@ -12,6 +12,15 @@ const FIELDS: FieldDef[] = [
   { kind: "switch", key: "votingOpen", label: "Voting is open", hint: "Votes use up a slot while a suggestion is here. Turn off for “Planned”, “Completed” and similar, so votes are returned." },
   { kind: "switch", key: "closesCommentsOnEntry", label: "Close comments when something moves here", hint: "For example on “Completed”." },
   { kind: "switch", key: "showOnRoadmap", label: "Show as a column on the roadmap" },
+  {
+    kind: "number",
+    key: "imageRetentionDays",
+    label: "Delete images after (days)",
+    min: 1,
+    max: 3650,
+    placeholder: "Never",
+    hint: "Pictures on a suggestion are deleted this many days after it moves here, and the Discord post loses its picture too. Leave blank to keep them. “Completed” starts at 30.",
+  },
   { kind: "switch", key: "isDefault", label: "Default for new approvals", hint: "Where suggestions land when you approve them.", lockedWhenOn: "isDefault" },
 ];
 
@@ -33,7 +42,7 @@ export default async function StatusesPage() {
           titleKey="name"
           max={LIMITS.maxStatuses}
           fields={FIELDS}
-          blank={{ name: "", color: "purple", votingOpen: false, closesCommentsOnEntry: false, showOnRoadmap: false, isDefault: false }}
+          blank={{ name: "", color: "purple", votingOpen: false, closesCommentsOnEntry: false, showOnRoadmap: false, imageRetentionDays: null, isDefault: false }}
           items={statuses.map((s) => {
             const n = usage.statuses[s.id] ?? 0;
             return {

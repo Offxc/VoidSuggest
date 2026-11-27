@@ -128,7 +128,13 @@ async function runSync(options: SyncOptions): Promise<void> {
 
   const rows = await prisma.suggestion.findMany({
     where: { approval: "APPROVED", OR: [{ discordMessageId: { not: null } }, ...toPost] },
-    include: { author: true, type: true, status: true, tags: { include: { tag: true } } },
+    include: {
+      author: true,
+      type: true,
+      status: true,
+      tags: { include: { tag: true } },
+      images: { select: { id: true }, orderBy: { position: "asc" }, take: 1 },
+    },
     orderBy: [{ approvedAt: "asc" }, { createdAt: "asc" }],
   });
 
@@ -145,6 +151,7 @@ async function runSync(options: SyncOptions): Promise<void> {
       tags: row.tags.map((t) => t.tag).sort((a, b) => a.sortOrder - b.sortOrder).map((t) => t.name),
       status: { name: row.status.name, color: toColor(row.status.color), votingOpen: row.status.votingOpen },
       approvedAt: row.approvedAt,
+      imageId: row.images[0]?.id ?? null,
       siteOrigin: origin,
     });
 

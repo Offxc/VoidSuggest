@@ -109,6 +109,7 @@ export async function createStatus(actor: User, input: StatusInput, request?: Re
         votingOpen: input.votingOpen,
         closesCommentsOnEntry: input.closesCommentsOnEntry,
         showOnRoadmap: input.showOnRoadmap,
+        imageRetentionDays: input.imageRetentionDays ?? null,
       },
     });
   });
@@ -141,6 +142,8 @@ export async function updateStatus(actor: User, id: string, input: StatusInput, 
         votingOpen: input.votingOpen,
         closesCommentsOnEntry: input.closesCommentsOnEntry,
         showOnRoadmap: input.showOnRoadmap,
+        // Left out means "don't change it", so an older form can't quietly turn the rule off.
+        ...(input.imageRetentionDays !== undefined ? { imageRetentionDays: input.imageRetentionDays } : {}),
         ...(input.isDefault ? { isDefault: true } : {}),
       },
     });

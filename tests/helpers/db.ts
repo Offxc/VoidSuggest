@@ -96,6 +96,9 @@ export interface CallOptions {
   params?: Record<string, string>;
   headers?: Record<string, string>;
   origin?: string | null;
+  /** Send these bytes as the body, with this content type, instead of JSON. */
+  raw?: Buffer;
+  contentType?: string;
 }
 
 /** Calls a route handler the way the framework would, with a genuine signed session cookie. */
@@ -105,6 +108,7 @@ export async function call(handler: ApiHandler, options: CallOptions = {}) {
   if (method !== "GET" && method !== "HEAD") {
     if (options.origin !== null) headers.set("origin", options.origin ?? "https://suggest.test");
     if (options.body !== undefined) headers.set("content-type", "application/json");
+    if (options.raw) headers.set("content-type", options.contentType ?? "image/png");
   }
   if (options.user) {
     headers.set("cookie", `${sessionCookieName()}=${await signSessionToken(options.user)}`);
@@ -113,16 +117,17 @@ export async function call(handler: ApiHandler, options: CallOptions = {}) {
     new Request(`https://suggest.test${options.path ?? "/api/test"}`, {
       method,
       headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body: options.raw ? new Uint8Array(options.raw) : options.body === undefined ? undefined : JSON.stringify(options.body),
     }),
     { params: Promise.resolve(options.params ?? {}) },
   );
-  const text = await response.text();
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const text = bytes.toString("utf8");
   let json: any = null;
   try {
     json = text ? JSON.parse(text) : null;
   } catch {
     /* not JSON (CSV, redirects) */
   }
-  return { status: response.status, json, text, headers: response.headers };
+  return { status: response.status, json, text, bytes, headers: response.headers };
 }

@@ -14,3 +14,9 @@ onlyBuiltDependencies:
   - "@prisma/client"
   - "@prisma/engines"
   - esbuild
+
+# Prisma's config loader pins an `effect` release with a published ReDoS
+# advisory (fixed in 3.22.1). It only runs in Prisma's command-line tools, but
+# take the patched release anyway so the dependency audit stays clean.
+overrides:
+  effect: ">=3.22.1 <4"
