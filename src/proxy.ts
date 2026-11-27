@@ -22,7 +22,8 @@ export default function proxy(request: NextRequest) {
     // React's dev tooling needs eval; production does not.
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
     isDev ? "style-src 'self' 'unsafe-inline'" : `style-src 'self' 'nonce-${nonce}'`,
-    `img-src 'self' ${AVATAR_HOST}`,
+    // blob: lets the upload form preview a picture the person just chose, before it is sent.
+    `img-src 'self' blob: ${AVATAR_HOST}`,
     "font-src 'self'",
     "connect-src 'self'",
     "object-src 'none'",

@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { toGuidelineItems } from "@/components/GuidelineNodes";
 import { SuggestionForm } from "@/components/SuggestionForm";
 import { requireUser } from "@/server/current";
-import { getGuidelines, getSuggestion, getTags, getTypes } from "@/server/queries";
+import { getGuidelines, getStatuses, getSuggestion, getTags, getTypes } from "@/server/queries";
+import { retentionNote } from "@/shared/images";
 import { getSettings } from "@/server/settings";
 
 export const metadata: Metadata = { title: "Edit suggestion" };
@@ -34,6 +35,8 @@ export default async function EditSuggestionPage({ params }: { params: Promise<{
         maxTags={settings.maxTagsPerSuggestion}
         guidelines={toGuidelineItems(await getGuidelines())}
         needsAck={false}
+        existingImages={detail.images}
+        imageNote={retentionNote(await getStatuses())}
         initial={{
           publicId: detail.publicId,
           title: detail.title,

@@ -48,6 +48,8 @@ export type ApiContext<A extends AuthLevel, B, Q> = {
   req: Request;
   user: A extends "public" | "discord" ? null : User;
   body: B;
+  /** The request body as bytes, for routes that declare `rawBody` (file uploads). Null otherwise. */
+  raw: Buffer | null;
   query: Q;
   params: Record<string, string>;
   ip: string;
@@ -58,6 +60,12 @@ export interface ApiOptions<A extends AuthLevel, B, Q> {
   body?: z.ZodType<B>;
   query?: z.ZodType<Q>;
   rate?: RateRule;
+  /**
+   * For uploads: the body is a single file sent as-is rather than JSON. The
+   * size limit is enforced while the body streams in, so an oversized upload
+   * is stopped early, and only the listed content types are accepted.
+   */
+  rawBody?: { maxBytes: number; types: readonly string[] };
   /** Member routes only: skip the "minimum days in the server" rule (for example, withdrawing your own pending suggestion). */
   skipTenure?: boolean;
   handler: (ctx: ApiContext<A, B, Q>) => Promise<unknown>;
@@ -66,6 +74,7 @@ export interface ApiOptions<A extends AuthLevel, B, Q> {
 export interface ApiMeta {
   auth: AuthLevel;
   hasBody: boolean;
+  hasRawBody: boolean;
   rate?: RateRule;
 }
 
@@ -94,6 +103,32 @@ function assertSameOrigin(req: Request): void {
   if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") {
     throw forbidden("Cross-site request blocked.", "bad_origin");
   }
+}
+
+/** Reads an uploaded file, giving up as soon as it goes over the limit rather than after buffering it all. */
+async function readRaw(req: Request, rule: { maxBytes: number; types: readonly string[] }): Promise<Buffer> {
+  const type = (req.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
+  if (!rule.types.includes(type)) throw new HttpError(415, "unsupported_media_type", "Please upload a PNG, JPEG or WebP image.");
+  const tooLarge = () => new HttpError(413, "too_large", `That file is too large. The limit is ${Math.floor(rule.maxBytes / (1024 * 1024))} MB.`);
+
+  const declared = Number(req.headers.get("content-length") ?? 0);
+  if (declared > rule.maxBytes) throw tooLarge();
+  if (!req.body) return Buffer.alloc(0);
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  const reader = req.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > rule.maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks, total);
 }
 
 async function readJson(req: Request): Promise<unknown> {
@@ -176,6 +211,7 @@ export function defineApi<A extends AuthLevel, B = undefined, Q = undefined>(
         if (rule?.per === "user") enforceRate(rule, `user:${user.id}`, req, user);
       }
 
+      const raw = options.rawBody ? await readRaw(req, options.rawBody) : null;
       const json = signed ? await readSignedJson(req, ip) : options.body ? await readJson(req) : undefined;
       const body = options.body ? validate(options.body, json) : (undefined as B);
       const query = options.query
@@ -187,12 +223,14 @@ export function defineApi<A extends AuthLevel, B = undefined, Q = undefined>(
         req,
         user: user as ApiContext<A, B, Q>["user"],
         body,
+        raw,
         query,
         params,
         ip,
       });
       if (result instanceof Response) {
-        result.headers.set("Cache-Control", "no-store");
+        // Nothing is cached unless the route says so itself (images, which are the one thing worth caching).
+        if (!result.headers.has("Cache-Control")) result.headers.set("Cache-Control", "no-store");
         return result;
       }
       return jsonResponse(result ?? { ok: true });
@@ -218,7 +256,7 @@ export function defineApi<A extends AuthLevel, B = undefined, Q = undefined>(
   };
 
   return Object.assign(handler, {
-    meta: { auth: options.auth, hasBody: Boolean(options.body), rate: options.rate } satisfies ApiMeta,
+    meta: { auth: options.auth, hasBody: Boolean(options.body), hasRawBody: Boolean(options.rawBody), rate: options.rate } satisfies ApiMeta,
   });
 }
 

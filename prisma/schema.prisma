@@ -46,6 +46,7 @@ enum TimelineKind {
   COMMENTS_OPENED
   COMMENTS_CLOSED
   EDITED
+  IMAGES_REMOVED
 }
 
 // ── People ───────────────────────────────────────────────────────────
@@ -139,6 +140,9 @@ model Status {
   votingOpen            Boolean @default(false)
   closesCommentsOnEntry Boolean @default(false)
   showOnRoadmap         Boolean @default(false)
+  /// Images attached to a suggestion are deleted this many days after it
+  /// moved here. NULL keeps them. (Set to 30 on "Completed".)
+  imageRetentionDays    Int?
 
   suggestions Suggestion[]
 }
@@ -220,14 +224,15 @@ model Suggestion {
   /// deleted by hand is not recreated behind their back.
   discordPostedAt  DateTime?
 
-  author   User            @relation(fields: [authorId], references: [id], onDelete: Restrict)
-  type     SuggestionType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
-  status   Status?         @relation(fields: [statusId], references: [id], onDelete: Restrict)
+  author   User              @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  type     SuggestionType?   @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  status   Status?           @relation(fields: [statusId], references: [id], onDelete: Restrict)
   tags     SuggestionTag[]
   votes    Vote[]
   comments Comment[]
   timeline TimelineEvent[]
   notices  Notice[]
+  images   SuggestionImage[]
 
   @@index([statusId, voteCount(sort: Desc), createdAt])
   @@index([authorId, approval])
@@ -256,6 +261,24 @@ model Vote {
 
   @@id([suggestionId, userId])
   @@index([userId])
+}
+
+/// A picture attached to a suggestion. Always a re-encoded WebP made by the
+/// server (never the uploaded file), kept in the database so it is backed up
+/// and deleted together with everything else. At most four per suggestion:
+/// the unique (suggestionId, position) with position 0-3 is what enforces it.
+model SuggestionImage {
+  id           String   @id @default(cuid())
+  suggestionId String
+  position     Int
+  width        Int
+  height       Int
+  data         Bytes
+  createdAt    DateTime @default(now())
+
+  suggestion Suggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+
+  @@unique([suggestionId, position])
 }
 
 model Comment {

@@ -31,6 +31,7 @@ const paths: Record<string, React.ReactNode> = {
   users: <path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zm-6 9a6 6 0 0 1 12 0M16 4.5a3.5 3.5 0 0 1 0 6.5M18 14a6 6 0 0 1 3 6" />,
   list: <path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" />,
   inbox: <path d="M4 13l2-8h12l2 8v6H4v-6zm0 0h5l1 2h4l1-2h5" />,
+  image: <path d="M4 5h16v14H4V5zm0 11l4.5-4.5 3.5 3.5 3-3 5 5M15.5 9.5h.01" />,
   scroll: <path d="M7 4h11v13a3 3 0 0 1-3 3H6m1-16a2 2 0 0 0-2 2v2h3M7 4v13a3 3 0 0 1-3 3" />,
 };
 

@@ -31,7 +31,7 @@ async function request(
 ): Promise<Response> {
   const env = getEnv();
   const headers: Record<string, string> = {
-    "User-Agent": "DiscordBot (https://github.com/Offxc/VoidSuggest, 0.2.0)",
+    "User-Agent": "DiscordBot (https://github.com/Offxc/VoidSuggest, 0.3.0)",
     ...init.headers,
   };
   if ("bot" in auth) headers.Authorization = `Bot ${env.DISCORD_BOT_TOKEN}`;

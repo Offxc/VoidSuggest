@@ -118,6 +118,8 @@ export const statusSchema = z.object({
   votingOpen: z.boolean(),
   closesCommentsOnEntry: z.boolean(),
   showOnRoadmap: z.boolean(),
+  /** Delete a suggestion's pictures this many days after it moves here. Null (or left out) keeps them. */
+  imageRetentionDays: z.number().int().min(1).max(3650).nullable().optional(),
   isDefault: z.boolean().optional(),
 });
 

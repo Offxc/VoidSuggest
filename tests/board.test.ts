@@ -572,6 +572,7 @@ describe("what a post can contain", () => {
     tags: ["Economy"],
     status: { name: "Suggestions", color: "purple", votingOpen: true },
     approvedAt: new Date("2026-01-01T00:00:00Z"),
+    imageId: null,
     siteOrigin: "https://suggest.test",
   };
 

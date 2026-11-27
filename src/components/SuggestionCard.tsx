@@ -56,6 +56,11 @@ export function SuggestionCard({ item, viewer, loginHref, showApproval = false, 
           ))}
           <Person person={item.author} small />
           <span>{timeAgo(item.createdAt)}</span>
+          {item.imageCount > 0 && (
+            <span title={`${item.imageCount} image${item.imageCount === 1 ? "" : "s"}`}>
+              <Icon name="image" /> {item.imageCount}
+            </span>
+          )}
           {approved && item.commentsMode !== "OFF" && (
             <span title={item.commentsMode === "CLOSED" ? "Comments closed" : "Comments open"}>
               <Icon name="chat" /> {item.commentCount}

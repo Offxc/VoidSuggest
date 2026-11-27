@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { ColorKey } from "../shared/constants";
-import { excerptOf } from "./dto";
+import { excerptOf, imageUrl } from "./dto";
 import type { MessagePayload } from "./discord";
 
 /**
@@ -91,6 +91,8 @@ export interface PostInput {
   tags: string[];
   status: { name: string; color: ColorKey; votingOpen: boolean };
   approvedAt: Date | null;
+  /** The first attached picture, if any. */
+  imageId: string | null;
   siteOrigin: string;
 }
 
@@ -129,6 +131,8 @@ export function renderPost(input: PostInput): Rendered {
           ...(input.typeName ? [{ name: "Type", value: formatted(input.typeName, 40), inline: true }] : []),
         ],
         footer: { text: footer },
+        // The picture is served by this site and Discord fetches it from there.
+        ...(input.imageId ? { image: { url: `${input.siteOrigin}${imageUrl(input.imageId)}` } } : {}),
         ...(input.approvedAt ? { timestamp: input.approvedAt.toISOString() } : {}),
       },
     ],

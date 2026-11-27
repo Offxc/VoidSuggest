@@ -14,13 +14,17 @@ export interface ApiResult<T> {
 }
 
 export async function api<T = unknown>(method: string, url: string, body?: unknown): Promise<ApiResult<T>> {
+  return send<T>(method, url, body === undefined ? undefined : { "Content-Type": "application/json" }, body === undefined ? undefined : JSON.stringify(body));
+}
+
+/** Sends a file as the whole request body, labelled with the type the browser reports. The server checks the contents itself. */
+export function apiUpload<T = unknown>(url: string, file: File): Promise<ApiResult<T>> {
+  return send<T>("POST", url, { "Content-Type": file.type }, file);
+}
+
+async function send<T>(method: string, url: string, headers: Record<string, string> | undefined, body: BodyInit | undefined): Promise<ApiResult<T>> {
   try {
-    const res = await fetch(url, {
-      method,
-      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      credentials: "same-origin",
-    });
+    const res = await fetch(url, { method, headers, body, credentials: "same-origin" });
     const json = (await res.json().catch(() => null)) as { error?: { message?: string; details?: unknown } } | T | null;
     if (res.ok) return { ok: true, status: res.status, data: json as T, message: null, fieldErrors: null };
     const error = (json as { error?: { message?: string; details?: unknown } } | null)?.error;
@@ -29,7 +33,9 @@ export async function api<T = unknown>(method: string, url: string, body?: unkno
       ok: false,
       status: res.status,
       data: null,
-      message: error?.message ?? (res.status === 429 ? "Too many requests. Please wait a moment." : "Something went wrong."),
+      message:
+        error?.message ??
+        (res.status === 429 ? "Too many requests. Please wait a moment." : res.status === 413 ? "That file is too large." : "Something went wrong."),
       fieldErrors: details,
     };
   } catch {

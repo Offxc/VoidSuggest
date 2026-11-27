@@ -24,6 +24,7 @@ const cardInclude = {
   type: true,
   status: true,
   tags: { include: { tag: true } },
+  _count: { select: { images: true } },
 } satisfies Prisma.SuggestionInclude;
 
 type Viewer = Pick<User, "id" | "isOwner"> | null;
@@ -164,7 +165,12 @@ export async function getRoadmap(viewer: Viewer): Promise<RoadmapColumn[]> {
 export async function getSuggestion(viewer: Viewer, publicId: string): Promise<SuggestionDetailDto | null> {
   const row = await prisma.suggestion.findUnique({
     where: { publicId },
-    include: { ...cardInclude, timeline: { orderBy: { createdAt: "asc" } } },
+    include: {
+      ...cardInclude,
+      timeline: { orderBy: { createdAt: "asc" } },
+      // Never `data`: the picture itself is only read when it is served.
+      images: { select: { id: true, width: true, height: true }, orderBy: { position: "asc" } },
+    },
   });
   if (!row) return null;
   const visible = row.approval === "APPROVED" || viewer?.isOwner || viewer?.id === row.authorId;

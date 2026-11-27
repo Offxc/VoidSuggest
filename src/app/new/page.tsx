@@ -5,7 +5,8 @@ import { ParticipationNotice } from "@/components/ParticipationNotice";
 import { SuggestionForm } from "@/components/SuggestionForm";
 import { getViewer, requireUser } from "@/server/current";
 import { toSite } from "@/server/dto";
-import { getGuidelines, getTags, getTypes } from "@/server/queries";
+import { getGuidelines, getStatuses, getTags, getTypes } from "@/server/queries";
+import { retentionNote } from "@/shared/images";
 import { getSettings } from "@/server/settings";
 
 export const metadata: Metadata = { title: "Suggest something" };
@@ -42,6 +43,7 @@ export default async function NewSuggestionPage() {
           maxTags={settings.maxTagsPerSuggestion}
           guidelines={toGuidelineItems(await getGuidelines())}
           needsAck={settings.requireGuidelinesAck && !user.isOwner && user.ackedGuidelinesVersion < settings.guidelinesVersion}
+          imageNote={retentionNote(await getStatuses())}
         />
       )}
     </div>

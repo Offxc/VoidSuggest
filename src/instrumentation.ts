@@ -30,6 +30,20 @@ export async function register() {
     setInterval(run, env.MEMBER_SYNC_MINUTES * 60_000).unref();
   }
 
+  // Pictures are deleted some days after a suggestion reaches a status such as
+  // "Completed" (the owner sets the number per status).
+  const { purgeExpiredImages } = await import("@/server/images");
+  const purge = async () => {
+    try {
+      const result = await purgeExpiredImages();
+      if (result.images > 0) console.log(`[images] removed ${result.images} expired image(s) from ${result.suggestions} suggestion(s)`);
+    } catch (err) {
+      console.error("[images] cleanup failed:", err instanceof Error ? err.name : "error");
+    }
+  };
+  setTimeout(purge, 60_000).unref();
+  setInterval(purge, 60 * 60_000).unref();
+
   // Keeps the Discord board in step even if an earlier update failed (Discord
   // down, a permission fixed since). Does nothing unless the owner switched it on.
   const { scheduleBoardSync } = await import("@/server/board");

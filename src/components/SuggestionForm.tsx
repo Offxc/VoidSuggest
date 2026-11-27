@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LIMITS } from "@/shared/constants";
-import type { TagDto, TypeDto } from "@/shared/types";
-import { api } from "./api-client";
+import { IMAGE_MAX_BYTES, IMAGE_MAX_PER_SUGGESTION, IMAGE_UPLOAD_TYPES } from "@/shared/images";
+import type { SuggestionImageDto, TagDto, TypeDto } from "@/shared/types";
+import { api, apiUpload } from "./api-client";
 import { Icon } from "./icons";
 
 export interface GuidelineItem {
@@ -23,6 +24,10 @@ interface Props {
   maxTags: number;
   guidelines: GuidelineItem[];
   needsAck: boolean;
+  /** Pictures the suggestion already has (editing). */
+  existingImages?: SuggestionImageDto[];
+  /** When and whether pictures are deleted, in the owner's words. */
+  imageNote?: string | null;
   initial?: { publicId: string; title: string; body: string; typeId: string | null; tagIds: string[] };
 }
 
@@ -33,7 +38,12 @@ interface Hit {
   statusName: string;
 }
 
-export function SuggestionForm({ mode, types, tags, maxTags, guidelines, needsAck, initial }: Props) {
+interface QueuedImage {
+  file: File;
+  preview: string;
+}
+
+export function SuggestionForm({ mode, types, tags, maxTags, guidelines, needsAck, existingImages = [], imageNote = null, initial }: Props) {
   const router = useRouter();
   const [typeId, setTypeId] = useState<string | null>(initial?.typeId ?? (types.length === 1 ? (types[0]?.id ?? null) : null));
   const [title, setTitle] = useState(initial?.title ?? "");
@@ -45,6 +55,66 @@ export function SuggestionForm({ mode, types, tags, maxTags, guidelines, needsAc
   const [error, setError] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string[]>>({});
   const lookup = useRef(0);
+
+  // Pictures: ones it already has, and ones chosen but not sent yet.
+  const [images, setImages] = useState<SuggestionImageDto[]>(existingImages);
+  const [queued, setQueued] = useState<QueuedImage[]>([]);
+  const [imageProblem, setImageProblem] = useState<string | null>(null);
+  // Set when the suggestion was saved but some pictures didn't go through, so the form can't be sent twice.
+  const [saved, setSaved] = useState<{ publicId: string; problems: string[] } | null>(null);
+  const previews = useRef<string[]>([]);
+  const imageRoom = IMAGE_MAX_PER_SUGGESTION - images.length - queued.length;
+
+  // Previews are made in the browser, so give the memory back when the form goes away.
+  useEffect(
+    () => () => {
+      for (const url of previews.current) URL.revokeObjectURL(url);
+    },
+    [],
+  );
+
+  function choose(list: FileList | null) {
+    if (!list) return;
+    setImageProblem(null);
+    const accepted: QueuedImage[] = [];
+    const problems: string[] = [];
+    for (const file of Array.from(list)) {
+      if (!(IMAGE_UPLOAD_TYPES as readonly string[]).includes(file.type)) problems.push(`${file.name} isn't a PNG, JPEG or WebP image.`);
+      else if (file.size > IMAGE_MAX_BYTES) problems.push(`${file.name} is over ${IMAGE_MAX_BYTES / (1024 * 1024)} MB.`);
+      else if (accepted.length >= imageRoom) problems.push(`Only ${IMAGE_MAX_PER_SUGGESTION} images fit on a suggestion.`);
+      else {
+        const preview = URL.createObjectURL(file);
+        previews.current.push(preview);
+        accepted.push({ file, preview });
+      }
+    }
+    if (accepted.length > 0) setQueued((q) => [...q, ...accepted]);
+    if (problems.length > 0) setImageProblem([...new Set(problems)].join(" "));
+  }
+
+  function unqueue(preview: string) {
+    URL.revokeObjectURL(preview);
+    previews.current = previews.current.filter((p) => p !== preview);
+    setQueued((q) => q.filter((x) => x.preview !== preview));
+  }
+
+  async function removeExisting(image: SuggestionImageDto) {
+    setImageProblem(null);
+    const result = await api("DELETE", `/api/suggestions/${initial!.publicId}/images/${image.id}`);
+    if (!result.ok) return setImageProblem(result.message ?? "Couldn't remove that image.");
+    setImages((list) => list.filter((i) => i.id !== image.id));
+  }
+
+  /** Sends the chosen pictures one at a time. Returns what went wrong, if anything. */
+  async function sendImages(publicId: string): Promise<string[]> {
+    const problems: string[] = [];
+    for (const item of queued) {
+      const result = await apiUpload<SuggestionImageDto>(`/api/suggestions/${publicId}/images`, item.file);
+      if (result.ok) unqueue(item.preview);
+      else problems.push(`${item.file.name}: ${result.message ?? "couldn't be uploaded."}`);
+    }
+    return problems;
+  }
 
   // Look for existing suggestions that resemble the title, to cut down on duplicates.
   useEffect(() => {
@@ -81,13 +151,20 @@ export function SuggestionForm({ mode, types, tags, maxTags, guidelines, needsAc
             ...(needsAck ? { acknowledgeGuidelines: ack } : {}),
           })
         : await api("PATCH", `/api/suggestions/${initial!.publicId}`, { title, body, typeId, tagIds });
-    setBusy(false);
     if (!result.ok) {
+      setBusy(false);
       setError(result.message);
       setFields(result.fieldErrors ?? {});
       return;
     }
     const target = mode === "create" ? (result.data as { publicId: string }).publicId : initial!.publicId;
+    const problems = queued.length > 0 ? await sendImages(target) : [];
+    setBusy(false);
+    if (problems.length > 0) {
+      // The text is saved. Stay here and say what didn't go through, rather than lose track of it.
+      setSaved({ publicId: target, problems });
+      return;
+    }
     router.push(`/s/${target}`);
     router.refresh();
   }
@@ -101,7 +178,8 @@ export function SuggestionForm({ mode, types, tags, maxTags, guidelines, needsAc
     bodyLen >= LIMITS.bodyMin &&
     bodyLen <= LIMITS.bodyMax &&
     (types.length === 0 || typeId !== null) &&
-    (!needsAck || ack);
+    (!needsAck || ack) &&
+    saved === null;
 
   return (
     <form onSubmit={submit} className="form-grid" noValidate>
@@ -173,9 +251,58 @@ export function SuggestionForm({ mode, types, tags, maxTags, guidelines, needsAc
           <div className={`counter ${bodyLen > LIMITS.bodyMax ? "over" : ""}`}>
             {bodyLen}/{LIMITS.bodyMax}
           </div>
-          <p className="hint">You can use **bold**, *italic*, lists and `code`. Links are fine; images and raw HTML aren't shown.</p>
+          <p className="hint">You can use **bold**, *italic*, lists and `code`. Links are fine; raw HTML isn't shown. Add pictures with the box below instead of in the text.</p>
           {fields.body && <p className="error-text">{fields.body[0]}</p>}
         </div>
+
+        <fieldset className="field">
+          <legend className="field-label">
+            Images <span className="dim">(optional, up to {IMAGE_MAX_PER_SUGGESTION})</span>
+          </legend>
+          {(images.length > 0 || queued.length > 0) && (
+            <div className="image-grid">
+              {images.map((img) => (
+                <figure key={img.id} className="thumb">
+                  <img src={img.url} width={img.width} height={img.height} alt="An image already on this suggestion" />
+                  <button type="button" className="btn btn-quiet btn-sm" onClick={() => removeExisting(img)}>
+                    Remove
+                  </button>
+                </figure>
+              ))}
+              {queued.map((q) => (
+                <figure key={q.preview} className="thumb">
+                  <img src={q.preview} alt={`Preview of ${q.file.name}`} />
+                  <button type="button" className="btn btn-quiet btn-sm" onClick={() => unqueue(q.preview)}>
+                    Remove
+                  </button>
+                </figure>
+              ))}
+            </div>
+          )}
+          {imageRoom > 0 && (
+            <input
+              id="images"
+              className="input"
+              type="file"
+              accept={IMAGE_UPLOAD_TYPES.join(",")}
+              multiple
+              onChange={(e) => {
+                choose(e.target.files);
+                e.target.value = "";
+              }}
+              aria-label="Add images"
+            />
+          )}
+          {imageProblem && (
+            <p role="alert" className="error-text">
+              {imageProblem}
+            </p>
+          )}
+          <p className="hint">
+            PNG, JPEG or WebP, up to {IMAGE_MAX_BYTES / (1024 * 1024)} MB each. The site saves its own copy, which removes any location or camera details.
+            Until it's approved, only you and the owner can see them.{imageNote ? ` ${imageNote}` : ""}
+          </p>
+        </fieldset>
 
         {tags.length > 0 && maxTags > 0 && (
           <fieldset className="field">
@@ -207,6 +334,22 @@ export function SuggestionForm({ mode, types, tags, maxTags, guidelines, needsAc
           <p role="alert" className="notice-bar bad">
             {error}
           </p>
+        )}
+
+        {saved && (
+          <div role="alert" className="notice-bar warn">
+            <p>
+              <strong>{mode === "create" ? "Your suggestion was submitted" : "Your changes were saved"}, but some images didn't upload:</strong>
+            </p>
+            <ul>
+              {saved.problems.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+            <p>
+              <Link href={`/s/${saved.publicId}`}>Open the suggestion</Link>, or <Link href={`/s/${saved.publicId}/edit`}>edit it</Link> to add the images again.
+            </p>
+          </div>
         )}
 
         <div className="row">

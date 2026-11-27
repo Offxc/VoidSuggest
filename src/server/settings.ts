@@ -32,6 +32,8 @@ export async function ensureDefaults(): Promise<void> {
           sortOrder: 3,
           showOnRoadmap: true,
           closesCommentsOnEntry: true,
+          // Pictures are deleted a month after something is completed.
+          imageRetentionDays: 30,
         },
         { name: "Declined", slug: "declined", color: "red", sortOrder: 4, closesCommentsOnEntry: true },
       ],
